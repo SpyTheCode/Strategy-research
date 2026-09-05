@@ -1,0 +1,11 @@
+# Exact versions this project's results were produced with.
+# Rebuild the environment with:
+#     .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# pandas / numpy  - the backtest engine itself (candle handling, R arithmetic)
+# requests        - talking to Bybit's public market API
+# pyarrow         - reading and writing the cached Parquet candle files
+pandas==3.0.5
+numpy==2.5.2
+requests==2.34.2
+pyarrow==25.0.1

@@ -92,3 +92,11 @@ tmp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---------------------------------------------------------------------------
+# EXCEPTIONS - the permanent research record
+# The rules above ignore *.csv and results/ because price history and per-trade
+# dumps get large. The two strategy logs are the whole point of the project and
+# must be version-controlled, so they are explicitly un-ignored here.
+# ---------------------------------------------------------------------------
+!strategy_log.csv

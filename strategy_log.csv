@@ -1,0 +1,1 @@
+strategy,coins,timeframes,exit_type,trades,win_rate_pct,rr_achieved,r_sum_pre_fee,r_sum_post_fee,sharpe_post_fee,max_drawdown_pct,max_drawdown_r,exit_death_flag,verdict,date_tested
