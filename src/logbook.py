@@ -15,16 +15,25 @@ ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = ROOT / "strategy_log.csv"
 MD_PATH = ROOT / "strategy_log.md"
 
-# The column list the project owner specified, plus max_drawdown_r. The extra
-# column is there because drawdown as a percentage depends on how much we chose
-# to risk per trade (1%), while drawdown in risk units does not - and the
-# discard bar's R-recovery test is computed from it, so it has to be auditable.
+# The column list the project owner specified, plus max_drawdown_r and the three
+# per-coin coverage columns. max_drawdown_r is there because drawdown as a
+# percentage depends on how much we chose to risk per trade (1%), while drawdown in
+# risk units does not - and the discard bar's R-recovery test is computed from it, so
+# it has to be auditable. The days_* columns sit next to `trades` because sample size
+# without sample length is not interpretable: the same 900 trades mean something
+# different over six years than over six months. They are the TRADEABLE window per
+# coin - after warmup, through the last closed bar - so they shrink at 1D, where a
+# warmup bar costs a whole day.
+COINS_LOGGED = ["BTCUSDT", "SOLUSDT", "XRPUSDT"]
+DAY_COLUMNS = [f"days_{c}" for c in COINS_LOGGED]
+
 COLUMNS = [
     "strategy",
     "coins",
     "timeframes",
     "exit_type",
     "trades",
+    *DAY_COLUMNS,
     "win_rate_pct",
     "rr_achieved",
     "r_sum_pre_fee",
@@ -61,17 +70,26 @@ def log_row(
     m: dict,
     exit_death_flag: str,
     verdict: str,
+    coverage_days: dict | None = None,
     tested_on: str | None = None,
 ) -> None:
-    """Append one run to strategy_log.csv. `m` is a metrics() dict."""
+    """Append one run to strategy_log.csv. `m` is a metrics() dict.
+
+    `coverage_days` maps coin -> tradeable days for THIS timeframe, from
+    coverage.days_by_coin(). Omitting it leaves those cells blank rather than
+    writing a zero, because a blank reads as "not recorded" and a zero reads as
+    "no history", which are different claims.
+    """
     ensure_headers()
     wr = m.get("win_rate")
+    cov = coverage_days or {}
     row = [
         strategy,
         coins,
         timeframes,
         exit_type,
         m.get("trades", 0),
+        *[_fmt(cov.get(c), 0) for c in COINS_LOGGED],
         _fmt(wr * 100.0 if isinstance(wr, float) and wr == wr else wr, 1),
         _fmt(m.get("rr_achieved")),
         _fmt(m.get("r_sum_pre_fee")),

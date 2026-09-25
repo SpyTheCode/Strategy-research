@@ -110,6 +110,57 @@ def verdict(m: dict, exit_variant: str, bar: DiscardBar = BAR) -> tuple[str, str
     return "INCONCLUSIVE", "positive but short of the KEEP bar: " + "; ".join(misses)
 
 
+EXIT_DEATH_GAP_R = 0.15   # a gap this big is worth more than the whole KEEP bar
+
+
+def exit_death(native: dict, forced: dict) -> tuple[str, str]:
+    """Is the result decided by the exit rules rather than by the entry signal?
+
+    Same entry, same 1R, only the exit differs - so any difference between the
+    two runs is attributable to the exit alone. Two ways that counts as the exit
+    being decisive:
+
+      * the two exits disagree on the SIGN of the edge - one makes money and the
+        other loses it. The entry cannot be both good and bad, so the exit is
+        what decided the outcome.
+      * they agree on the sign but differ by at least 0.15R per trade, which is
+        larger than the entire +0.10R KEEP requirement. An exit choice worth
+        more than the bar itself is the dominant factor.
+
+    Returns ("yes"|"no", plain-English diagnosis).
+    """
+    a = native.get("expectancy_post_fee_r", float("nan"))
+    b = forced.get("expectancy_post_fee_r", float("nan"))
+    na, nb = native.get("trades", 0), forced.get("trades", 0)
+
+    if not (_ok(a) and _ok(b)) or min(na, nb) == 0:
+        return "n/a", "one of the two runs produced no completed trades, so they cannot be compared"
+
+    gap = b - a
+    better = "forced 1:3" if gap > 0 else "native"
+    worse = "native" if gap > 0 else "forced 1:3"
+
+    if (a > 0) != (b > 0):
+        return "yes", (
+            f"the exit flips the sign of the edge: native {a:+.3f}R per trade vs "
+            f"forced 1:3 {b:+.3f}R. Identical entries, so the entry signal is not "
+            f"what decided this - the {worse} exit is. The edge, such as it is, "
+            f"lives in the {better} exit."
+        )
+    if abs(gap) >= EXIT_DEATH_GAP_R:
+        return "yes", (
+            f"both exits agree on direction but differ by {abs(gap):.3f}R per trade "
+            f"(native {a:+.3f}R vs forced 1:3 {b:+.3f}R), which is larger than the "
+            f"entire +0.10R KEEP requirement. The {better} exit is doing more work "
+            f"than the entry signal."
+        )
+    return "no", (
+        f"the two exits land within {abs(gap):.3f}R per trade of each other "
+        f"(native {a:+.3f}R vs forced 1:3 {b:+.3f}R), so the result is driven by "
+        f"the entry signal rather than by the choice of exit"
+    )
+
+
 def describe() -> str:
     """The bar, in words, for the write-up."""
     b = BAR

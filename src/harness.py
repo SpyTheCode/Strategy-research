@@ -37,10 +37,28 @@ RISK_FRACTION = 0.01      # each trade risks 1% of starting equity, never compou
 
 @dataclass(frozen=True)
 class Signal:
-    """A strategy's instruction, formed on a closed bar, filled at the next open."""
+    """A strategy's instruction, formed on a closed bar, filled at the next open.
 
-    direction: int      # +1 long, -1 short
-    stop_price: float   # the price that defines "1 risk unit" (1R)
+    The 1R distance can be given two ways, and exactly one must be supplied:
+
+      stop_price  an absolute price level (a swing high, a band, an ATR offset)
+      stop_frac   a fraction of the entry price, for sources that specify a
+                  "fixed percentage from entry". The entry price is not knowable
+                  when the signal is formed - it is the next bar's open - so the
+                  engine resolves this at fill time rather than letting a
+                  strategy approximate it with the signal bar's close.
+    """
+
+    direction: int                      # +1 long, -1 short
+    stop_price: float | None = None
+    stop_frac: float | None = None
+
+    def resolve_stop(self, entry_price: float) -> float:
+        if (self.stop_price is None) == (self.stop_frac is None):
+            raise ValueError("Signal needs exactly one of stop_price or stop_frac")
+        if self.stop_price is not None:
+            return float(self.stop_price)
+        return float(entry_price * (1.0 - self.direction * self.stop_frac))
 
 
 @dataclass
@@ -194,8 +212,8 @@ def simulate(
             pending_exit_reason = None
 
         if position is None and pending_entry is not None:
-            stop = float(pending_entry.stop_price)
             entry_px = float(row["open"])
+            stop = pending_entry.resolve_stop(entry_px)
             if stop != entry_px:  # a zero-risk trade has no definable R
                 position = Trade(
                     direction=pending_entry.direction,
@@ -243,6 +261,184 @@ def simulate(
 
     # An open position at the end of the data is left out entirely rather than
     # marked to the last close, so no unresolved bet is counted as a result.
+    return trades
+
+
+def simulate_resting(
+    df: pd.DataFrame,
+    exit_fn,
+    *,
+    warmup: int,
+    time_limit_bars: int | None = None,
+    entry_fee_rate: float = TAKER_FEE_RATE,
+    exit_fee_rate: float = TAKER_FEE_RATE,
+    stats: dict | None = None,
+) -> list[Trade]:
+    """Second execution path: RESTING STOP ORDERS, filled during a bar.
+
+    `simulate` above answers "what does a strategy decide on a closed bar", and
+    fills that decision at the next open. Some strategies - Crabel's opening
+    range breakout is the first here - do not decide on a closed bar at all.
+    They place two stop orders at prices computed before the session starts and
+    let the market choose. Routing that through `simulate` would fill at the
+    next bar's open instead of at the order's own price, which is not the same
+    strategy: on daily bars it would delete the breakout entirely.
+
+    So this is a separate function rather than a flag inside `simulate`, and
+    `simulate` is untouched, so nothing already measured can move.
+
+    WHERE THE LINE BETWEEN LOOKAHEAD AND EXECUTION SITS
+    --------------------------------------------------
+    This function reads bar i's high and low. That is not a lookahead breach,
+    and the distinction is worth being precise about:
+
+      * the STRATEGY may not use bar i's high or low to decide whether to place
+        an order. It does not: buy_trig and sell_trig are computed from days
+        that have already closed plus the session's opening price.
+      * the ENGINE must use bar i's high and low to decide whether an order
+        already resting at a known price was penetrated. A real exchange does
+        exactly that.
+
+    The test is whether the trigger PRICE could have been known before the bar
+    began. It could. Everything after that is fill mechanics.
+
+    THREE HOUSE RULES, ALL IN THE CONSERVATIVE DIRECTION
+    ---------------------------------------------------
+      1. If one bar's range covers BOTH triggers, no trade is taken and the
+         session is closed to further entries. Candle data cannot say which
+         side traded first. Skipping is not neutral - it removes the widest
+         sessions, which is where a breakout rule expects to earn - so the
+         count is returned in `stats` and must be reported.
+      2. A bar that opens beyond a resting stop fills at the OPEN, not at the
+         trigger. Gapping through a stop order costs you the difference.
+      3. A trade entered part-way through bar i is still tested against bar i's
+         full range by `exit_fn`. Some of that range happened before entry, so
+         this overstates stop-outs on the entry bar. `context_checks`
+         measures the share of trades that die on their entry bar, which is
+         exactly the size of this effect, so it is quantified rather than
+         assumed away.
+
+    Required columns: buy_trig, sell_trig, armed, risk_unit, session_first,
+    session_last. One trade per session, no re-entry, no reversal.
+    """
+    for col in ("buy_trig", "sell_trig", "armed", "risk_unit",
+                "session_first", "session_last"):
+        if col not in df.columns:
+            raise KeyError(f"simulate_resting needs a {col!r} column")
+
+    o = df["open"].to_numpy(dtype=float)
+    hi = df["high"].to_numpy(dtype=float)
+    lo = df["low"].to_numpy(dtype=float)
+    buy = df["buy_trig"].to_numpy(dtype=float)
+    sell = df["sell_trig"].to_numpy(dtype=float)
+    risk = df["risk_unit"].to_numpy(dtype=float)
+    armed = df["armed"].to_numpy(dtype=bool)
+    s_first = df["session_first"].to_numpy(dtype=bool)
+    s_last = df["session_last"].to_numpy(dtype=bool)
+    times = pd.DatetimeIndex(df["open_time"])
+    regimes = (df["regime"].to_numpy(dtype=object) if "regime" in df.columns
+               else np.array([""] * len(df), dtype=object))
+
+    trades: list[Trade] = []
+    position: Trade | None = None
+    pending_exit_reason: str | None = None
+    n = len(df)
+
+    # Session accounting. None means "no session is being tracked yet", which is
+    # the state until the first session boundary at or after warmup.
+    state: str | None = None
+    counts = {"sessions_armed": 0, "traded": 0, "ambiguous": 0,
+              "blocked": 0, "no_touch": 0}
+
+    for i in range(warmup, n):
+        row = {"open": o[i], "high": hi[i], "low": lo[i]}
+
+        # 1. An exit decided on the previous bar fills at this bar's open. For
+        #    the native rule that open IS the next day's open.
+        if position is not None and pending_exit_reason is not None:
+            position.exit_time = times[i]
+            position.exit_price = float(o[i])
+            position.exit_reason = pending_exit_reason
+            trades.append(position)
+            position = None
+            pending_exit_reason = None
+
+        # 2. A new session starts: the two orders are placed, or they are not.
+        if s_first[i]:
+            if not armed[i]:
+                state = None
+            elif position is not None:
+                # Still holding from a previous session, so this session's
+                # orders could not have been ours. Only reachable in the forced
+                # variant, whose time limit can outlast a session.
+                counts["sessions_armed"] += 1
+                counts["blocked"] += 1
+                state = "blocked"
+            else:
+                counts["sessions_armed"] += 1
+                state = "open"
+
+        # 3. Are either of the resting orders penetrated on this bar?
+        if state == "open" and position is None and armed[i] and risk[i] > 0:
+            hit_buy = hi[i] >= buy[i]
+            hit_sell = lo[i] <= sell[i]
+            if hit_buy and hit_sell:
+                counts["ambiguous"] += 1
+                state = "ambiguous"
+            elif hit_buy or hit_sell:
+                d = 1 if hit_buy else -1
+                # Gap protection: a stop order is filled at the worse of its own
+                # level and the price the bar actually opened at.
+                entry_px = (max(buy[i], o[i]) if d > 0 else min(sell[i], o[i]))
+                position = Trade(
+                    direction=d,
+                    entry_time=times[i],
+                    entry_price=float(entry_px),
+                    initial_stop=float(entry_px - d * risk[i]),
+                    regime=str(regimes[i]),
+                    entry_fee_rate=entry_fee_rate,
+                    exit_fee_rate=exit_fee_rate,
+                )
+                counts["traded"] += 1
+                state = "traded"
+
+        # 4. While holding, see what this candle does to the trade. Identical
+        #    treatment to `simulate`: the stop wins every tie.
+        if position is not None:
+            plan = exit_fn(df, i, position)
+            d = position.direction
+            hit_stop = plan.stop_level is not None and _stop_hit(row, plan.stop_level, d)
+            hit_target = plan.target_level is not None and _target_hit(row, plan.target_level, d)
+
+            if hit_stop:
+                position.exit_time = times[i]
+                position.exit_price = _stop_fill(row, float(plan.stop_level), d)
+                position.exit_reason = "stop"
+                trades.append(position)
+                position = None
+            elif hit_target:
+                position.exit_time = times[i]
+                position.exit_price = float(plan.target_level)
+                position.exit_reason = "target"
+                trades.append(position)
+                position = None
+            else:
+                position.bars_held += 1
+                if time_limit_bars is not None and position.bars_held >= time_limit_bars:
+                    pending_exit_reason = "time"
+                elif plan.close_exit:
+                    pending_exit_reason = plan.reason or "signal"
+
+        # 5. Close the books on the session.
+        if s_last[i]:
+            if state == "open":
+                counts["no_touch"] += 1
+            state = None
+
+    if stats is not None:
+        stats.update(counts)
+    # As in `simulate`, a position still open when the data ends is discarded
+    # rather than marked to the last close.
     return trades
 
 

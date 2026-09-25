@@ -23,8 +23,12 @@ import requests
 HOSTS = ["https://api.bybit.com", "https://api.bytick.com", "https://api.bybit.nl"]
 
 # Bybit's interval codes, keyed by the label we use everywhere else.
-INTERVAL_CODE = {"1H": "60", "4H": "240", "1D": "D"}
-INTERVAL_MS = {"1H": 3_600_000, "4H": 14_400_000, "1D": 86_400_000}
+# 6H is here because Strategy #3's source reports its headline result on 6-hour
+# bars specifically, and its own timeframe table shows the result changing with
+# the bar size. Testing everything except the one configuration the source
+# actually claims would not be a test of that source.
+INTERVAL_CODE = {"1H": "60", "4H": "240", "6H": "360", "1D": "D"}
+INTERVAL_MS = {"1H": 3_600_000, "4H": 14_400_000, "6H": 21_600_000, "1D": 86_400_000}
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _HOST_CACHE: list[str] = []
