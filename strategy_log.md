@@ -129,6 +129,232 @@ untested.**
 ---
 ---
 
+# Master verdict index - every cell this project has ever scored
+
+One row per strategy x timeframe x exit variant. Nothing is merged, averaged or
+re-judged: every number below is copied from that strategy's own results table and
+every verdict is the one the fixed discard bar returned. Eight strategies, **58
+cells** - the complete decision universe, KEEP and INCONCLUSIVE and DISCARD together.
+
+Coverage is the **shortest coin window** in each pooled run, which is the binding
+floor rather than the average. Bitcoin's history on this venue begins March 2020,
+XRP May 2021, Solana October 2021, so a pooled row is never three equal thirds.
+Every money figure is **post-fee**. `t` is the post-fee t-statistic - the average
+trade divided by its own standard error; below about 2 the average sits inside the
+range random noise would produce anyway.
+
+Strategy #8 was run three times (2026-09-05, 2026-09-12, 2026-09-22) as the rule was
+rebuilt; the rows below are the **final** run, and the two earlier runs are preserved
+unchanged further down. Strategy #4's 1D forced-1:3 t-statistic is -3325.97 because
+every one of its 2095 trades resolved identically (0.0% win rate) and the standard
+error is effectively zero - a degenerate cell, not a typo.
+
+## The decision universe
+
+| Strategy | TF | Exit | Trades | Coverage (yr) | R/trade | Sharpe | R-recovery | RR | t | Verdict | Primary reason |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| #1 Bollinger Band Reversion (short only) | 1H | native | 1054 | 4.87 | -0.046 | -0.39 | -0.59 | 1.17 | -1.17 | **DISCARD** | post-fee expectancy -0.046R is not positive |
+| #1 Bollinger Band Reversion (short only) | 1H | forced-1:3 | 1054 | 4.87 | -0.002 | -0.02 | -0.04 | 1.57 | -0.05 | **DISCARD** | post-fee expectancy -0.002R is not positive |
+| #1 Bollinger Band Reversion (short only) | 4H | native | 290 | 4.80 | -0.230 | -0.80 | -0.99 | 2.66 | -2.30 | **DISCARD** | post-fee expectancy -0.230R is not positive |
+| #1 Bollinger Band Reversion (short only) | 4H | forced-1:3 | 294 | 4.80 | -0.126 | -0.47 | -1.03 | 2.36 | -1.34 | **DISCARD** | post-fee expectancy -0.126R is not positive |
+| #1 Bollinger Band Reversion (short only) | 1D | native | 57 | 4.34 | -0.206 | -0.18 | -0.45 | 8.17 | -0.50 | **DISCARD** | post-fee expectancy -0.206R is not positive |
+| #1 Bollinger Band Reversion (short only) | 1D | forced-1:3 | 61 | 4.34 | -0.334 | -0.69 | -0.97 | 2.79 | -1.68 | **DISCARD** | post-fee expectancy -0.334R is not positive |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 1H | native | 123 | 4.80 | +0.971 | 0.62 | 6.39 | 5.33 | +1.83 | **INCONCLUSIVE** | Sharpe 0.62 < 0.70 |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 1H | forced-1:3 | 357 | 4.80 | +0.014 | 0.18 | 0.65 | 1.06 | +0.58 | **DISCARD** | post-fee Sharpe 0.18 < 0.30 |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 4H | native | 134 | 4.80 | +0.859 | 0.58 | 5.03 | 4.67 | +1.70 | **INCONCLUSIVE** | Sharpe 0.58 < 0.70 |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 4H | forced-1:3 | 360 | 4.80 | +0.074 | 0.52 | 1.41 | 1.45 | +1.58 | **INCONCLUSIVE** | expectancy +0.074R < +0.10R; Sharpe 0.52 < 0.70; recovery 1.41 < 1.50 |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 1D | native | 141 | 4.56 | +0.807 | 0.67 | 5.43 | 4.56 | +1.80 | **INCONCLUSIVE** | Sharpe 0.67 < 0.70 |
+| #2 Dual Momentum (absolute leg + Bitcoin switch) | 1D | forced-1:3 | 163 | 4.56 | +0.144 | 0.47 | 1.15 | 1.98 | +1.19 | **INCONCLUSIVE** | Sharpe 0.47 < 0.70; recovery 1.15 < 1.50 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 1H | native | 702 | 4.79 | +0.090 | 0.46 | 0.84 | 2.13 | +1.20 | **INCONCLUSIVE** | expectancy +0.090R < +0.10R; Sharpe 0.46 < 0.70; recovery 0.84 < 1.50 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 1H | forced-1:3 | 672 | 4.79 | -0.023 | -0.18 | -0.22 | 1.30 | -0.49 | **DISCARD** | post-fee expectancy -0.023R is not positive |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 4H | native | 389 | 4.79 | +0.098 | 0.38 | 1.32 | 2.11 | +1.15 | **INCONCLUSIVE** | expectancy +0.098R < +0.10R; Sharpe 0.38 < 0.70; recovery 1.32 < 1.50 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 4H | forced-1:3 | 352 | 4.79 | -0.030 | -0.17 | -0.25 | 1.52 | -0.44 | **DISCARD** | post-fee expectancy -0.030R is not positive |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 6H | native | 317 | 4.79 | +0.077 | 0.35 | 0.91 | 1.95 | +0.89 | **INCONCLUSIVE** | expectancy +0.077R < +0.10R; Sharpe 0.35 < 0.70; recovery 0.91 < 1.50 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 6H | forced-1:3 | 279 | 4.79 | +0.044 | 0.21 | 0.51 | 1.57 | +0.57 | **DISCARD** | post-fee Sharpe 0.21 < 0.30 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 1D | native | 154 | 4.56 | +0.060 | 0.15 | 0.52 | 2.34 | +0.48 | **DISCARD** | post-fee Sharpe 0.15 < 0.30 |
+| #3 AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail) | 1D | forced-1:3 | 131 | 4.56 | +0.027 | 0.09 | 0.18 | 1.45 | +0.24 | **DISCARD** | post-fee Sharpe 0.09 < 0.30; recovery 0.18 < 0.50 |
+| #4 Crabel Opening Range Breakout ("the stretch") | 1H | native | 2251 | 4.84 | +0.033 | 0.48 | 2.49 | 1.44 | +1.48 | **INCONCLUSIVE** | expectancy +0.033R < +0.10R; Sharpe 0.48 < 0.70; RR 1.44 < 1.50 |
+| #4 Crabel Opening Range Breakout ("the stretch") | 1H | forced-1:3 | 1595 | 4.84 | -0.013 | -0.16 | -0.34 | 1.37 | -0.48 | **DISCARD** | post-fee expectancy -0.013R is not positive |
+| #4 Crabel Opening Range Breakout ("the stretch") | 4H | native | 2244 | 4.83 | +0.037 | 0.55 | 2.85 | 1.46 | +1.70 | **INCONCLUSIVE** | expectancy +0.037R < +0.10R; Sharpe 0.55 < 0.70; RR 1.46 < 1.50 |
+| #4 Crabel Opening Range Breakout ("the stretch") | 4H | forced-1:3 | 1253 | 4.83 | -0.166 | -1.47 | -0.97 | 1.78 | -4.18 | **DISCARD** | post-fee expectancy -0.166R is not positive |
+| #4 Crabel Opening Range Breakout ("the stretch") | 6H | native | 2232 | 4.81 | +0.039 | 0.57 | 2.93 | 1.47 | +1.75 | **INCONCLUSIVE** | expectancy +0.039R < +0.10R; Sharpe 0.57 < 0.70; RR 1.47 < 1.50 |
+| #4 Crabel Opening Range Breakout ("the stretch") | 6H | forced-1:3 | 1221 | 4.81 | -0.341 | -2.98 | -0.99 | 2.01 | -8.52 | **DISCARD** | post-fee expectancy -0.341R is not positive |
+| #4 Crabel Opening Range Breakout ("the stretch") | 1D | native | 2094 | 4.56 | +0.071 | 1.03 | 5.60 | 1.62 | +3.14 | **INCONCLUSIVE** | expectancy +0.071R < +0.10R - the ONLY gate it misses |
+| #4 Crabel Opening Range Breakout ("the stretch") | 1D | forced-1:3 | 2095 | 4.56 | -1.031 | -17.18 | -1.00 | n/a (0.0% win) | -3325.97 | **DISCARD** | post-fee expectancy -1.031R is not positive; every trade identical |
+| #5 Keltner Channel breakout | 1H | native | 5745 | 4.87 | -0.054 | -1.92 | -0.88 | 1.97 | -6.24 | **DISCARD** | post-fee expectancy -0.054R is not positive |
+| #5 Keltner Channel breakout | 1H | forced-1:3 | 3239 | 4.87 | +0.018 | 0.24 | 0.79 | 1.70 | +0.74 | **DISCARD** | post-fee Sharpe 0.24 < 0.30 |
+| #5 Keltner Channel breakout | 4H | native | 1482 | 4.82 | +0.011 | 0.22 | 0.94 | 2.25 | +0.66 | **DISCARD** | post-fee Sharpe 0.22 < 0.30 |
+| #5 Keltner Channel breakout | 4H | forced-1:3 | 832 | 4.82 | +0.107 | 0.72 | 3.34 | 1.76 | +2.11 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.107R to +0.088R |
+| #5 Keltner Channel breakout | 6H | native | 961 | 4.79 | +0.046 | 0.70 | 3.61 | 2.48 | +1.93 | **INCONCLUSIVE** | expectancy +0.046R < +0.10R; Sharpe 0.70 < 0.70 |
+| #5 Keltner Channel breakout | 6H | forced-1:3 | 570 | 4.79 | +0.078 | 0.47 | 1.62 | 1.82 | +1.29 | **INCONCLUSIVE** | expectancy +0.078R < +0.10R; Sharpe 0.47 < 0.70 |
+| #5 Keltner Channel breakout | 1D | native | 218 | 4.48 | +0.154 | 0.86 | 6.12 | 3.20 | +2.17 | **KEEP** | clears every gate; survives funding at base rate (+0.147R) |
+| #5 Keltner Channel breakout | 1D | forced-1:3 | 127 | 4.48 | +0.118 | 0.34 | 0.92 | 2.20 | +0.87 | **INCONCLUSIVE** | Sharpe 0.34 < 0.70; recovery 0.92 < 1.50 |
+| #6 Ichimoku Cloud trend trading | 1H | native | 3843 | 4.87 | +0.118 | 0.42 | 1.70 | 3.72 | +1.16 | **INCONCLUSIVE** | Sharpe 0.42 < 0.70 |
+| #6 Ichimoku Cloud trend trading | 1H | forced-1:3 | 4670 | 4.87 | -0.046 | -0.74 | -0.66 | 1.62 | -2.18 | **DISCARD** | post-fee expectancy -0.046R is not positive |
+| #6 Ichimoku Cloud trend trading | 4H | native | 902 | 4.82 | +0.300 | 0.81 | 4.86 | 3.72 | +2.13 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.300R to +0.247R |
+| #6 Ichimoku Cloud trend trading | 4H | forced-1:3 | 1122 | 4.82 | +0.095 | 0.77 | 3.41 | 1.76 | +2.16 | **INCONCLUSIVE** | expectancy +0.095R < +0.10R - the ONLY gate it misses |
+| #6 Ichimoku Cloud trend trading | 6H | native | 594 | 4.79 | +0.317 | 0.64 | 3.74 | 4.22 | +1.61 | **INCONCLUSIVE** | Sharpe 0.64 < 0.70 |
+| #6 Ichimoku Cloud trend trading | 6H | forced-1:3 | 745 | 4.79 | +0.064 | 0.45 | 1.40 | 1.73 | +1.22 | **INCONCLUSIVE** | expectancy +0.064R < +0.10R; Sharpe 0.45 < 0.70; recovery 1.40 < 1.50 |
+| #6 Ichimoku Cloud trend trading | 1D | native | 144 | 4.48 | +1.027 | 0.59 | 5.79 | 7.25 | +1.47 | **INCONCLUSIVE** | Sharpe 0.59 < 0.70 |
+| #6 Ichimoku Cloud trend trading | 1D | forced-1:3 | 182 | 4.48 | +0.051 | 0.19 | 0.41 | 1.96 | +0.46 | **DISCARD** | post-fee Sharpe 0.19 < 0.30; recovery 0.41 < 0.50 |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 1H | native | 237 | 4.83 | +0.444 | 0.80 | 6.85 | 3.66 | +2.04 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.444R to +0.399R |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 1H | forced-1:3 | 624 | 4.83 | +0.098 | 1.16 | 7.02 | 1.55 | +3.54 | **INCONCLUSIVE** | expectancy +0.098R < +0.10R - the ONLY gate it misses |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 4H | native | 220 | 4.83 | +0.550 | 0.75 | 9.21 | 3.79 | +1.87 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.550R to +0.503R |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 4H | forced-1:3 | 386 | 4.83 | +0.144 | 0.96 | 5.28 | 1.65 | +2.67 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.144R to +0.130R |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 6H | native | 219 | 4.81 | +0.509 | 0.70 | 9.10 | 3.83 | +1.75 | **INCONCLUSIVE** | Sharpe 0.70 < 0.70 - the ONLY gate it misses |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 6H | forced-1:3 | 340 | 4.81 | +0.198 | 1.12 | 5.80 | 1.74 | +3.05 | **KEEP** | clears every gate; PROVISIONAL - funding at base rate takes +0.198R to +0.180R |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 1D | native | 188 | 4.56 | +0.537 | 0.69 | 8.49 | 3.48 | +1.67 | **INCONCLUSIVE** | Sharpe 0.69 < 0.70 - the ONLY gate it misses |
+| #7 Turtle/Donchian 20-day breakout (System 1, no pyramiding) | 1D | forced-1:3 | 208 | 4.56 | +0.182 | 0.62 | 2.27 | 2.06 | +1.65 | **INCONCLUSIVE** | Sharpe 0.62 < 0.70 - the ONLY gate it misses |
+| #8 Supertrend (10, 3) | 1H | native | 3394 | 4.88 | +0.222 | 0.69 | 3.07 | 2.07 | +2.12 | **INCONCLUSIVE** | Sharpe 0.69 < 0.70 - the ONLY gate it misses |
+| #8 Supertrend (10, 3) | 1H | forced-1:3 | 3346 | 4.88 | -0.123 | -1.40 | -0.93 | 2.24 | -4.22 | **DISCARD** | post-fee expectancy -0.123R is not positive |
+| #8 Supertrend (10, 3) | 4H | native | 850 | 4.87 | +0.798 | 0.89 | 9.20 | 2.66 | +2.40 | **KEEP** | clears every gate; survives funding at base rate (+0.691R) |
+| #8 Supertrend (10, 3) | 4H | forced-1:3 | 841 | 4.87 | +0.037 | 0.21 | 0.71 | 2.44 | +0.63 | **DISCARD** | post-fee Sharpe 0.21 < 0.30 |
+| #8 Supertrend (10, 3) | 1D | native | 139 | 4.75 | +2.145 | 0.62 | 5.31 | 4.73 | +1.57 | **INCONCLUSIVE** | Sharpe 0.62 < 0.70 - the ONLY gate it misses |
+| #8 Supertrend (10, 3) | 1D | forced-1:3 | 140 | 4.75 | +0.210 | 0.53 | 2.92 | 2.75 | +1.36 | **INCONCLUSIVE** | Sharpe 0.53 < 0.70 - the ONLY gate it misses |
+
+
+## Verdict counts
+
+| Verdict | Cells | Share | Strategies with at least one |
+|---|---|---|---|
+| **KEEP** | 8 | 13.8% | #5 (2), #6 (1), #7 (4), #8 (1) |
+| **INCONCLUSIVE** | 27 | 46.6% | #2, #3, #4, #5, #6, #7, #8 |
+| **DISCARD** | 23 | 39.7% | #1, #2, #3, #4, #5, #6, #8 |
+| **Total** | **58** | 100% | 8 strategies |
+
+The count reconciles with the row count above: 58 cells. Two strategies hold the
+extremes - **#1 is the only strategy with zero non-DISCARD cells** (all six fail),
+and **#7 is the only strategy with zero DISCARD cells** (four KEEP, four
+INCONCLUSIVE). No strategy earned a KEEP on a forced-1:3 exit alone without also
+having a positive native exit; #5's 4H forced-1:3 is the closest thing, and it is
+provisional on funding.
+
+## Gate evidence for the 50 non-KEEP cells
+
+KEEP needs: 30+ trades, expectancy >= +0.10R, Sharpe >= 0.70, R-recovery >= 1.50,
+and (native) achieved RR >= 1.50 or (forced-1:3) win rate >= its own fee-breakeven
++ 2pp. DISCARD is **any one** of: expectancy <= +0.00R, Sharpe < 0.30, R-recovery
+< 0.50. A cell that clears every DISCARD floor but misses any KEEP floor is
+INCONCLUSIVE - it is positive evidence that is not yet strong enough to act on.
+
+**The 23 DISCARD cells** - the first DISCARD gate each one trips:
+
+| # | Strategy | TF / Exit | Failing metric | Actual | Discard gate | Result | Also failing |
+|---|---|---|---|---|---|---|---|
+| 1 | #1 | 1H native | expectancy | -0.046R | > +0.00R | FAIL | Sharpe -0.39 < 0.30; recovery -0.59 < 0.50 |
+| 2 | #1 | 1H forced-1:3 | expectancy | -0.002R | > +0.00R | FAIL | Sharpe -0.02 < 0.30; recovery -0.04 < 0.50 |
+| 3 | #1 | 4H native | expectancy | -0.230R | > +0.00R | FAIL | Sharpe -0.80 < 0.30; recovery -0.99 < 0.50 |
+| 4 | #1 | 4H forced-1:3 | expectancy | -0.126R | > +0.00R | FAIL | Sharpe -0.47 < 0.30; recovery -1.03 < 0.50 |
+| 5 | #1 | 1D native | expectancy | -0.206R | > +0.00R | FAIL | Sharpe -0.18 < 0.30; recovery -0.45 < 0.50 |
+| 6 | #1 | 1D forced-1:3 | expectancy | -0.334R | > +0.00R | FAIL | Sharpe -0.69 < 0.30; recovery -0.97 < 0.50 |
+| 7 | #2 | 1H forced-1:3 | Sharpe | 0.18 | >= 0.30 | FAIL | none - expectancy +0.014R and recovery 0.79 both clear their floors |
+| 8 | #3 | 1H forced-1:3 | expectancy | -0.023R | > +0.00R | FAIL | Sharpe -0.18 < 0.30; recovery -0.22 < 0.50 |
+| 9 | #3 | 4H forced-1:3 | expectancy | -0.030R | > +0.00R | FAIL | Sharpe -0.17 < 0.30; recovery -0.25 < 0.50 |
+| 10 | #3 | 6H forced-1:3 | Sharpe | 0.21 | >= 0.30 | FAIL | none - expectancy +0.044R and recovery 0.51 both clear their floors |
+| 11 | #3 | 1D native | Sharpe | 0.15 | >= 0.30 | FAIL | none - expectancy +0.060R and recovery 0.52 both clear their floors |
+| 12 | #3 | 1D forced-1:3 | Sharpe | 0.09 | >= 0.30 | FAIL | recovery 0.18 < 0.50 |
+| 13 | #4 | 1H forced-1:3 | expectancy | -0.013R | > +0.00R | FAIL | Sharpe -0.16 < 0.30; recovery -0.34 < 0.50 |
+| 14 | #4 | 4H forced-1:3 | expectancy | -0.166R | > +0.00R | FAIL | Sharpe -1.47 < 0.30; recovery -0.97 < 0.50 |
+| 15 | #4 | 6H forced-1:3 | expectancy | -0.341R | > +0.00R | FAIL | Sharpe -2.98 < 0.30; recovery -0.99 < 0.50 |
+| 16 | #4 | 1D forced-1:3 | expectancy | -1.031R | > +0.00R | FAIL | Sharpe -17.18 < 0.30; recovery -1.00 < 0.50 |
+| 17 | #5 | 1H native | expectancy | -0.054R | > +0.00R | FAIL | Sharpe -1.92 < 0.30; recovery -0.88 < 0.50 |
+| 18 | #5 | 1H forced-1:3 | Sharpe | 0.24 | >= 0.30 | FAIL | none - expectancy +0.018R and recovery 0.79 both clear their floors |
+| 19 | #5 | 4H native | Sharpe | 0.22 | >= 0.30 | FAIL | none - expectancy +0.011R and recovery 0.94 both clear their floors |
+| 20 | #6 | 1H forced-1:3 | expectancy | -0.046R | > +0.00R | FAIL | Sharpe -0.74 < 0.30; recovery -0.66 < 0.50 |
+| 21 | #6 | 1D forced-1:3 | Sharpe | 0.19 | >= 0.30 | FAIL | recovery 0.41 < 0.50 |
+| 22 | #8 | 1H forced-1:3 | expectancy | -0.123R | > +0.00R | FAIL | Sharpe -1.40 < 0.30; recovery -0.93 < 0.50 |
+| 23 | #8 | 4H forced-1:3 | Sharpe | 0.21 | >= 0.30 | FAIL | none - expectancy +0.037R and recovery 0.71 both clear their floors |
+
+**The 27 INCONCLUSIVE cells** - the KEEP gate each one misses:
+
+| # | Strategy | TF / Exit | Missed gate | Actual | KEEP gate | Result | Also missing |
+|---|---|---|---|---|---|---|---|
+| 1 | #2 | 1H native | Sharpe | 0.62 | >= 0.70 | FAIL | none - expectancy +0.971R, recovery 6.39, RR 5.33 all pass |
+| 2 | #2 | 4H native | Sharpe | 0.58 | >= 0.70 | FAIL | none - expectancy +0.859R, recovery 5.03, RR 4.67 all pass |
+| 3 | #2 | 4H forced-1:3 | expectancy | +0.074R | >= +0.10R | FAIL | Sharpe 0.52 < 0.70; recovery 1.41 < 1.50 |
+| 4 | #2 | 1D native | Sharpe | 0.67 | >= 0.70 | FAIL | none - expectancy +0.807R, recovery 5.43, RR 4.56 all pass |
+| 5 | #2 | 1D forced-1:3 | Sharpe | 0.47 | >= 0.70 | FAIL | recovery 1.15 < 1.50 |
+| 6 | #3 | 1H native | expectancy | +0.090R | >= +0.10R | FAIL | Sharpe 0.46 < 0.70; recovery 0.84 < 1.50 |
+| 7 | #3 | 4H native | expectancy | +0.098R | >= +0.10R | FAIL | Sharpe 0.38 < 0.70; recovery 1.32 < 1.50 |
+| 8 | #3 | 6H native | expectancy | +0.077R | >= +0.10R | FAIL | Sharpe 0.35 < 0.70; recovery 0.91 < 1.50 |
+| 9 | #4 | 1H native | expectancy | +0.033R | >= +0.10R | FAIL | Sharpe 0.48 < 0.70; RR 1.44 < 1.50 |
+| 10 | #4 | 4H native | expectancy | +0.037R | >= +0.10R | FAIL | Sharpe 0.55 < 0.70; RR 1.46 < 1.50 |
+| 11 | #4 | 6H native | expectancy | +0.039R | >= +0.10R | FAIL | Sharpe 0.57 < 0.70; RR 1.47 < 1.50 |
+| 12 | #4 | 1D native | expectancy | +0.071R | >= +0.10R | FAIL | **nothing else** - Sharpe 1.03, recovery 5.60, RR 1.62, t +3.14 all pass |
+| 13 | #5 | 6H native | expectancy | +0.046R | >= +0.10R | FAIL | Sharpe 0.70 < 0.70 |
+| 14 | #5 | 6H forced-1:3 | expectancy | +0.078R | >= +0.10R | FAIL | Sharpe 0.47 < 0.70 |
+| 15 | #5 | 1D forced-1:3 | Sharpe | 0.34 | >= 0.70 | FAIL | recovery 0.92 < 1.50 |
+| 16 | #6 | 1H native | Sharpe | 0.42 | >= 0.70 | FAIL | none - expectancy +0.118R, recovery 1.70, RR 3.72 all pass |
+| 17 | #6 | 4H forced-1:3 | expectancy | +0.095R | >= +0.10R | FAIL | **nothing else** - Sharpe 0.77, recovery 3.41, t +2.16 all pass |
+| 18 | #6 | 6H native | Sharpe | 0.64 | >= 0.70 | FAIL | none - expectancy +0.317R, recovery 3.74, RR 4.22 all pass |
+| 19 | #6 | 6H forced-1:3 | expectancy | +0.064R | >= +0.10R | FAIL | Sharpe 0.45 < 0.70; recovery 1.40 < 1.50 |
+| 20 | #6 | 1D native | Sharpe | 0.59 | >= 0.70 | FAIL | none - expectancy +1.027R, recovery 5.79, RR 7.25 all pass |
+| 21 | #7 | 1H forced-1:3 | expectancy | +0.098R | >= +0.10R | FAIL | **nothing else** - Sharpe 1.16, recovery 7.02, t +3.54 all pass |
+| 22 | #7 | 6H native | Sharpe | 0.70 | >= 0.70 | FAIL | **nothing else** - expectancy +0.509R, recovery 9.10, t +1.75 all pass |
+| 23 | #7 | 1D native | Sharpe | 0.69 | >= 0.70 | FAIL | **nothing else** - expectancy +0.537R, recovery 8.49, t +1.67 all pass |
+| 24 | #7 | 1D forced-1:3 | Sharpe | 0.62 | >= 0.70 | FAIL | **nothing else** - expectancy +0.182R, recovery 2.27, t +1.65 all pass |
+| 25 | #8 | 1H native | Sharpe | 0.69 | >= 0.70 | FAIL | **nothing else** - expectancy +0.222R, recovery 3.07, t +2.12 all pass |
+| 26 | #8 | 1D native | Sharpe | 0.62 | >= 0.70 | FAIL | **nothing else** - expectancy +2.145R, recovery 5.31, t +1.57 all pass |
+| 27 | #8 | 1D forced-1:3 | Sharpe | 0.53 | >= 0.70 | FAIL | **nothing else** - expectancy +0.210R, recovery 2.92, t +1.36 all pass |
+
+## Borderline calls - where the verdict turned on one number
+
+**Fifteen of the 27 INCONCLUSIVE cells miss exactly one gate**, and twelve of those
+fifteen miss it on **Sharpe alone**. Read those twelve and a pattern appears: the
+entry is real, the sample is large, and the *only* thing between the cell and a KEEP
+is that the equity curve is not smooth enough. That is a statement about variance,
+not about direction.
+
+- **#8 1H native is the textbook case.** Post-fee Sharpe **0.69 against a 0.70
+  gate** - a thousandth short. Every other criterion passes comfortably: expectancy
+  +0.222R per trade (gate +0.10R), R-recovery 3.07 (gate 1.50), RR 2.07 (gate 1.50),
+  t = +2.12 (clear of the noise band), 3394 trades over 4.88 years. This cell is
+  INCONCLUSIVE for one reason and one only, and the reason is a rounding-width
+  shortfall in smoothness.
+- **#7 1D native** sits in the same place: Sharpe **0.69** against 0.70, with
+  expectancy +0.537R, recovery 8.49 and t = +1.67. **#7 6H native** reads 0.70 in the
+  table and is still below the gate, because the unrounded value is marginally under.
+- **#6 1D native** is the same story at a different scale: +1.027R per trade, recovery
+  5.79, RR 7.25 - a genuinely large edge held back by Sharpe 0.59 on only 144 trades.
+  The t-statistic (+1.47) says the sample is not large enough to be confident about
+  that edge either.
+- **The three expectancy-only misses are the opposite case.** #4 1D native (+0.071R
+  vs +0.10R), #6 4H forced-1:3 (+0.095R) and #7 1H forced-1:3 (+0.098R) each clear
+  Sharpe, recovery and t comfortably and fail only the expectancy floor - by 0.029R,
+  0.005R and 0.002R respectively. Two of those three are within five-thousandths of a
+  risk unit of a KEEP.
+
+**One KEEP does not survive its own funding bill.** #5 4H forced-1:3 clears every
+gate as measured (+0.107R, Sharpe 0.72, recovery 3.34, t = +2.11), but it holds
+positions for about 70 hours across roughly 8.7 funding settlements, and at Bybit's
+*base* rate of 0.01% per 8 hours that costs about -0.019R per trade - taking the edge
+to **+0.088R, below the +0.10R threshold**. Funding at the base rate alone is enough
+to demote this cell, and the base rate is a floor: real funding on these coins has
+spent long stretches above it. It is logged as KEEP and flagged provisional, because
+that is what the measured numbers say and the funding rule was fixed before the
+strategy was run.
+
+**The other seven KEEPs survive funding at the base rate**, though all seven cross
+funding stamps by design and are provisional until a funding model exists: #5 1D
+native (+0.154R to +0.147R), #6 4H native (+0.300R to +0.247R), #7 1H native (+0.444R
+to +0.399R), #7 4H native (+0.550R to +0.503R), #7 4H forced-1:3 (+0.144R to +0.130R),
+#7 6H forced-1:3 (+0.198R to +0.180R) and #8 4H native (+0.798R to +0.691R).
+
+## What this index deliberately does not do
+
+It does not merge the two exits on a timeframe into one verdict, because a strategy
+can have a good entry and a bad exit and that difference *is* the finding - #4 is the
+cleanest example, INCONCLUSIVE on its own exit at all four resolutions and DISCARD on
+the forced 1:3 at all four. It does not average across timeframes, because #1's 1H
+and 1D cells are not the same question. It does not promote the borderline Sharpe
+cells above, because the 0.70 gate was fixed before any of these strategies were
+written and a gate that moves to fit the data is not a gate. And it does not
+substitute for the sections below: every row here has a full write-up behind it,
+including the sensitivity sweeps, exit-death checks and per-coin breakdowns that a
+single line of metrics cannot carry.
+
+---
+
 ## Strategy #1 — Bollinger Band Reversion (short only)
 
 **Tested:** 2026-09-05 · **Coins:** BTCUSDT, SOLUSDT, XRPUSDT
