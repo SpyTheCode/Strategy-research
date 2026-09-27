@@ -4881,3 +4881,980 @@ mostly stop out. Nothing here suggests the entry signal has value on its own.
 At 4H the native exit took 850 trades at 0.798R each; at 1H, 3394 trades at 0.222R each.
 Both are the indicator's own rule, not a tuned version of it.
 
+## Strategy #9 - Bulkowski's Narrow Range 7 (NR7)
+
+### Source, and the rule exactly as written
+
+Thomas Bulkowski, "NR7", *thepatternsite.com* (Encyclopedia of Chart Patterns). The setup and the
+crypto-specific entry are short enough to quote in full:
+
+* Setup: *"The most recent bar must have a smaller high-low price range than the prior six bars
+  (seven bars, total)."* The range is **high - low**. He is explicit that it is not true range.
+* Breakout: *"A breakout occurs when price closes above the top or below the bottom of the NR7."*
+* Entry, for the cryptocurrency test: *"I placed a buy stop a penny above the top of the NR7 and a
+  stop loss order a penny below the bottom of the pattern."*
+* Exit, the measure rule: *"Measure the height of pattern and add it to the highest price in the
+  pattern to get an upward target or subtract it from the lowest low in the pattern to get a
+  downward price target."*
+
+This is the next strategy in the lineage started by #4: Crabel names the "narrow range day" as the
+conditioning framework for his opening-range breakout and defers its measurement to paywalled
+chapters. Bulkowski's NR7 is the standard, fully-published form of that same idea, so it is what
+gets tested here instead of a guess at what Crabel left out.
+
+**The rule as tested:** bar D's high-low range is the smallest of the last seven. Before bar D+1
+opens, a buy stop sits at bar D's high and a sell stop at bar D's low; whichever fires first is the
+trade, and the other end of the pattern is the stop. The exit is the measure rule - the pattern's
+own height projected from the entry - which is exactly 1R, making the native exit a symmetric 1:1.
+
+### What is a PLACEHOLDER, never a guess at the source's intent
+
+* **"A penny" above and below the trigger.** Meaningless on a six-figure bitcoin. The traded config
+  puts the trigger exactly on bar D's high and low; the offset is run as a sensitivity at 0.1% of
+  the bar's range rather than assumed. This is the only free parameter the rule contains.
+* **How long unfilled orders rest.** The source says when the breakout is *recognised*, not when
+  unexecuted orders are cancelled. The literal reading of *"price closes above the top"* is the
+  following bar, so `REST_BARS = 1` is the headline and 2 / 3 bars are sensitivities.
+* **N = 7**, because the source is "NR7". NR4 is a separately published pattern and is run as a
+  sensitivity, not folded into the headline.
+
+### What this test could NOT reproduce, and what that means
+
+* **The venue and the asset class.** Bulkowski's own result is on 38 cryptocurrencies, but his
+  stop-loss and measure-rule percentages come from an equities career. The structural difference
+  matters more here than for any other strategy in this project, for the reason in the geometry
+  section below.
+* **A stop order that is actually resting.** Bybit charges taker fees on both legs of a stop order
+  in this test. A maker rebate on the entry leg is the cheapest realistic change, and it is
+  reported in the fee section rather than assumed away.
+* **The trend conditioning of the source's own result.** He reports the win rate separately in
+  uptrends and downtrends; the regime table below is the closest this project has, and it is
+  labelled post-fee where his is not.
+
+### Lookahead bias: what was checked, freshly, for this strategy
+
+The runner audits every coin/timeframe input before simulation by rebuilding indicators on truncated
+history and comparing with the full-data values; this report also prints a separate BTCUSDT 1H audit.
+The displayed audit checked 10 computed columns and passed. Four places needed real care:
+
+* **IS_NR7** compares bar D against the six bars before it and is written ON bar D, so it is a
+  closed-bar fact by construction.
+* **The triggers and the risk unit** are the most recent narrow bar's own high, low and range,
+  carried forward with `where(is_nr7).ffill().shift(1)` - bar *i* reads only bars at or before *i-1*.
+* **The "session" is the armed window, not the clock.** NR7's orders rest for bars after a narrow
+  bar, which can begin at any hour. The window is therefore derived from IS_NR7 alone, which is closed-
+  bar data; it is not aligned to a UTC day.
+* **The current bar's high and low** are used by the engine to FILL an order that was already
+  sitting there at a pre-bar price, and are never used by the strategy to DECIDE anything. Six
+  hand-built-candle tests in the shared resting-order test suite pin that behaviour down, including
+  filling at the trigger, filling worse when a bar gaps through it, and refusing to guess when one
+  bar covers both sides.
+
+### Results - three coins pooled per timeframe, every number post-fee
+
+The four timeframes are one test at four bar sizes. The rule never changes: seven bars, smallest
+range wins, trade the next bar's breakout. Only the bar that carries the definition changes.
+
+| Timeframe | Exit | Trades | Win% | RR | R (pre-fee) | R (post-fee) | R/trade | Sharpe | Max DD % | Max DD (R) | R-recovery | Fee cost/trade | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1H | native | 13031 | 62.3 | 0.62 | 3469.0 | 107.9 | 0.008 | 0.34 | 104.1 | 227.2 | 0.48 | 0.258R | **DISCARD** |
+| 1H | forced-1:3 | 10555 | 32.8 | 2.18 | 3221.5 | 585.4 | 0.055 | 1.09 | 86.4 | 162.0 | 3.61 | 0.250R | **INCONCLUSIVE** |
+| 4H | native | 3030 | 62.4 | 0.78 | 754.0 | 383.3 | 0.126 | 2.67 | 10.8 | 22.9 | 16.71 | 0.122R | **INCONCLUSIVE** |
+| 4H | forced-1:3 | 2557 | 33.1 | 2.54 | 805.8 | 496.4 | 0.194 | 1.92 | 17.2 | 36.9 | 13.47 | 0.121R | **KEEP** |
+| 6H | native | 2109 | 63.3 | 0.82 | 563.0 | 353.4 | 0.168 | 2.95 | 6.8 | 12.8 | 27.71 | 0.099R | **INCONCLUSIVE** |
+| 6H | forced-1:3 | 1760 | 31.8 | 2.62 | 467.4 | 293.9 | 0.167 | 1.40 | 22.7 | 44.1 | 6.66 | 0.099R | **KEEP** |
+| 1D | native | 525 | 68.2 | 0.91 | 191.0 | 164.7 | 0.314 | 2.76 | 4.6 | 6.8 | 24.05 | 0.050R | **INCONCLUSIVE** |
+| 1D | forced-1:3 | 447 | 37.1 | 2.79 | 214.5 | 191.5 | 0.428 | 1.70 | 8.5 | 16.1 | 11.87 | 0.052R | **KEEP** |
+
+**Verdicts, per exit variant, never collapsed:**
+
+* **Native (the source's own measure rule):** 1H DISCARD - earned only 0.48x its worst drawdown · 4H INCONCLUSIVE - positive but short of the KEEP bar: achieved RR 0.78 < 1.5 · 6H INCONCLUSIVE - positive but short of the KEEP bar: achieved RR 0.82 < 1.5 · 1D INCONCLUSIVE - positive but short of the KEEP bar: achieved RR 0.91 < 1.5
+* **Forced 1:3:** 1H INCONCLUSIVE - positive but short of the KEEP bar: expectancy +0.055R < +0.10R; win rate 32.8% < 33.2% needed to clear its own fee bill (fees cost 0.250R per trade) · 4H KEEP - +0.194R per trade, Sharpe 1.92, earned 13.47x its worst drawdown over 2557 trades · 6H KEEP - +0.167R per trade, Sharpe 1.40, earned 6.66x its worst drawdown over 1760 trades · 1D KEEP - +0.428R per trade, Sharpe 1.70, earned 11.87x its worst drawdown over 447 trades
+
+Exit-death check (does the source's own exit beat a forced 1:3 on the same entries):
+1H: no (the two exits land within 0.047R per trade of each other (native +0.008R vs forced 1:3 +0.055R), so the result is driven by the entry signal rather than by the choice of exit) · 4H: no (the two exits land within 0.068R per trade of each other (native +0.126R vs forced 1:3 +0.194R), so the result is driven by the entry signal rather than by the choice of exit) · 6H: no (the two exits land within 0.001R per trade of each other (native +0.168R vs forced 1:3 +0.167R), so the result is driven by the entry signal rather than by the choice of exit) · 1D: no (the two exits land within 0.115R per trade of each other (native +0.314R vs forced 1:3 +0.428R), so the result is driven by the entry signal rather than by the choice of exit).
+Rows that read yes: 1H, 4H, 6H, 1D.
+
+The two variants share 1H 82.6%, 4H 86.1%, 6H 84.7%, 1D 85.9% of their entries,
+against the 85% minimum for "same entries, only the exit differs" to be
+a fair claim. The overlap is short on the fine bars because the two exits hold for different lengths
+(a 1:1 measure exit versus a 30-bar triple barrier), so while holding one blocks different armed
+sessions for each. The disagreement is in the SIGN of the edge and is far larger than the overlap gap
+can account for, which is the comparison the exit-death check exists to make.
+
+### Why the result is what it is: the pattern's own geometry
+
+NR7 is the first strategy in this project whose risk unit is defined as the SMALLEST thing in the
+window. Every other strategy measures 1R from a typical or an extreme candle - an ATR, a channel, a
+day's range - so 1R is at least as big as a normal bar. Here 1R is required to be *narrower than six
+of the last seven bars*. That is not a side effect of the construction; it is the construction.
+
+| Coin | 1R as % of price (1H) | NR7 bars as % of all bars (1H) | 1R as % of price (1D) |
+|---|---|---|---|
+| BTCUSDT | 0.373% | 17.1% | 1.822% |
+| SOLUSDT | 0.719% | 16.2% | 3.721% |
+| XRPUSDT | 0.543% | 16.1% | 2.858% |
+| Round-trip taker fee | 0.110% of price | | |
+
+The round-trip taker fee is 0.110% of price and the median risk unit is 0.543% of
+price, so fees cost roughly **0.26R per trade** at 1H. In this
+ pooled sample the native 1H expectancy moves from 0.266R gross to
+ 0.008R post-fee. Fees materially reduce the edge, but do not erase it
+in the pooled 1H mean; the negative BTC row and the weak aggregate Sharpe explain why the quality
+verdict can still be DISCARD.
+
+The same fee-to-risk mechanism documented in `discard_bar.py` applies: as 1R gets smaller relative to
+the fixed percentage fee, fees consume more R per trade. This is an explanation for the timeframe
+pattern, not by itself a complete causal account of the observed coin- and timeframe-level results.
+
+### Concentration - is the edge in one leg or one coin?
+
+NR7 is symmetric by construction: a buy stop above and a sell stop below the same bar. If the market
+is genuinely choosing a direction out of consolidation, both legs should carry it.
+
+| Timeframe | Exit | Long trades | Long R | Long win% | Short trades | Short R | Short win% |
+|---|---|---|---|---|---|---|---|
+| 1H | native | 6598 | -117.3 | 61.0 | 6433 | +225.2 | 63.7 |
+| 1H | forced-1:3 | 5379 | -28.5 | 31.4 | 5176 | +613.9 | 34.3 |
+| 4H | native | 1585 | +171.6 | 61.5 | 1445 | +211.7 | 63.5 |
+| 4H | forced-1:3 | 1341 | +255.0 | 33.0 | 1216 | +241.4 | 33.3 |
+| 6H | native | 1061 | +184.1 | 63.7 | 1048 | +169.3 | 63.0 |
+| 6H | forced-1:3 | 900 | +205.6 | 33.4 | 860 | +88.3 | 30.1 |
+| 1D | native | 255 | +61.8 | 64.7 | 270 | +102.9 | 71.5 |
+| 1D | forced-1:3 | 214 | +78.6 | 35.5 | 233 | +113.0 | 38.6 |
+
+At 1H, 6598 long and 6433 short entries split roughly
+evenly. The pooled result is not representative of every coin: the per-coin table above shows BTC's
+native 1H row is negative while SOL and XRP are positive. Both legs and all coins therefore need to be
+read separately; a pooled edge is not evidence of a uniform signal.
+
+### Regime - does it work anywhere?
+
+* **down/highvol:** 2633 trades, +186.8R post-fee
+* **down/lowvol:** 2358 trades, -164.9R post-fee
+* **range/highvol:** 1362 trades, +107.5R post-fee
+* **range/lowvol:** 1712 trades, -7.5R post-fee
+* **up/highvol:** 2562 trades, +82.7R post-fee
+* **up/lowvol:** 2404 trades, -96.8R post-fee
+
+Best regime: down/highvol. Worst: down/lowvol. The source's own result is conditioned
+on trend direction (48% win in an uptrend, 42% in a downtrend) and
+is stated gross; these rows are post-fee, so they are not comparable column for column.
+
+### Fees and funding: the binding constraint
+
+Fee cost per trade is **0.258R** native and 0.250R
+forced at 1H, against a median 1R of 0.543% of price. The breakeven win rate for the
+forced 1:3 at that fee level is **31.2%**, and the measured
+win rate is **32.8%** - the forced variant lands essentially on its own fee-breakeven
+line, so judge the actual post-fee expectancy and verdict rather than inferring that costs consume
+the whole signal. Forced 1:3 verdicts by timeframe: 1H INCONCLUSIVE; 4H KEEP; 6H KEEP; 1D KEEP.
+
+Pre-fee, the entry is doing something: the gross t-statistic is +31.53 at 1H
+(1H +31.53 / 4H +14.14 / 6H +12.72 / 1D +8.94 across timeframes). Post-fee it is +0.96 (1H +0.96 / 4H +7.19 / 6H +7.99 / 1D +7.73). The 1H t-statistic
+falls sharply after fees; on coarser bars the measured edge remains positive. Statistical evidence is
+not by itself proof of a robust or transferable strategy.
+
+### Coverage, and the sensitivities
+
+| Timeframe | Coin | Window traded | Days | Years | Tradeable bars | Warmup bars |
+|---|---|---|---|---|---|---|
+| 1H | BTCUSDT | 2020-04-03 to 2026-09-05 | 2346 | 6.42 | 56,295 | 216 |
+| 1H | SOLUSDT | 2021-10-24 to 2026-09-05 | 1777 | 4.87 | 42,649 | 216 |
+| 1H | XRPUSDT | 2021-05-22 to 2026-09-05 | 1932 | 5.29 | 46,360 | 216 |
+| 4H | BTCUSDT | 2020-04-14 to 2026-09-05 | 2335 | 6.39 | 14,009 | 120 |
+| 4H | SOLUSDT | 2021-11-04 to 2026-09-05 | 1766 | 4.84 | 10,597 | 120 |
+| 4H | XRPUSDT | 2021-06-02 to 2026-09-05 | 1921 | 5.26 | 11,525 | 120 |
+| 6H | BTCUSDT | 2020-04-24 to 2026-09-05 | 2325 | 6.37 | 9,302 | 120 |
+| 6H | SOLUSDT | 2021-11-14 to 2026-09-05 | 1756 | 4.81 | 7,027 | 120 |
+| 6H | XRPUSDT | 2021-06-12 to 2026-09-05 | 1911 | 5.23 | 7,646 | 120 |
+| 1D | BTCUSDT | 2020-07-23 to 2026-09-05 | 2235 | 6.12 | 2,236 | 120 |
+| 1D | SOLUSDT | 2022-02-12 to 2026-09-05 | 1666 | 4.56 | 1,667 | 120 |
+| 1D | XRPUSDT | 2021-09-10 to 2026-09-05 | 1821 | 4.99 | 1,822 | 120 | (warmup: 216 1H bars, so
+the 100-bar regime average is populated before any trade.)
+
+Sensitivities, headline timeframe, both exits:
+
+| Variant (1H) | Exit | Trades | Win% | RR | R (post-fee) | R/trade | Sharpe | Fee cost/trade | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| N = 7 (traded) | native | 13031 | 62.3 | 0.62 | 107.9 | 0.008 | 0.34 | 0.258R | DISCARD |
+| N = 7 (traded) | forced-1:3 | 10555 | 32.8 | 2.18 | 585.4 | 0.055 | 1.09 | 0.250R | INCONCLUSIVE |
+| N = 4 (NR4, separately published) | native | 19698 | 60.5 | 0.65 | 8.5 | 0.000 | 0.02 | 0.222R | DISCARD |
+| N = 4 (NR4, separately published) | forced-1:3 | 13845 | 32.4 | 2.23 | 752.9 | 0.054 | 1.21 | 0.212R | INCONCLUSIVE |
+| N = 10 | native | 9760 | 63.6 | 0.59 | 138.3 | 0.014 | 0.52 | 0.283R | INCONCLUSIVE |
+| N = 10 | forced-1:3 | 8256 | 33.3 | 2.12 | 429.8 | 0.052 | 0.93 | 0.278R | INCONCLUSIVE |
+| trigger offset = 0.1% of the bar's range | native | 13292 | 60.8 | 0.61 | -344.3 | -0.026 | -1.07 | 0.261R | DISCARD |
+| trigger offset = 0.1% of the bar's range | forced-1:3 | 10766 | 32.2 | 2.17 | 312.1 | 0.029 | 0.58 | 0.252R | INCONCLUSIVE |
+| orders rest 2 bars | native | 13031 | 62.3 | 0.62 | 107.9 | 0.008 | 0.34 | 0.258R | DISCARD |
+| orders rest 2 bars | forced-1:3 | 10555 | 32.8 | 2.18 | 585.4 | 0.055 | 1.09 | 0.250R | INCONCLUSIVE |
+| orders rest 3 bars | native | 13031 | 62.3 | 0.62 | 107.9 | 0.008 | 0.34 | 0.258R | DISCARD |
+| orders rest 3 bars | forced-1:3 | 10555 | 32.8 | 2.18 | 585.4 | 0.055 | 1.09 | 0.250R | INCONCLUSIVE |
+
+The table is the evidence for the sensitivities; each row uses its own warmup. NR4 and N=10 change
+both the frequency and geometry of setups, and the offset changes which breakouts fill. These are
+different rules, not independent confirmation of the N=7 headline. The rest-window variants are also
+reported as-run. Resting orders for two or three bars produced the same aggregate metrics as one bar
+in this run. The execution model tracks one active session state, so the unchanged results should not
+be interpreted as evidence that order expiry never matters; the longer-rest variants are not
+independent confirmation of the headline result.
+
+### Bottom line
+
+Measured native verdicts by timeframe: 1H DISCARD; 4H INCONCLUSIVE; 6H INCONCLUSIVE; 1D INCONCLUSIVE.
+Forced 1:3 verdicts: 1H INCONCLUSIVE; 4H KEEP; 6H KEEP; 1D KEEP. At 1H,
+the native strategy records 107.9R post-fee over 13031 pooled trades
+(62.3% wins), while forced 1:3 records 585.4R over
+10555 trades (32.8% wins). The measured headline native expectancy is
+0.008R/trade; the verdict is based on the shared discard criteria,
+not a blanket claim that all fees erase all edge.
+
+### Interpretation and limits
+
+Bulkowski reports underperformance against buy-and-hold in his own sample. This backtest does not
+calculate a buy-and-hold comparison, so it cannot independently confirm that benchmark claim. Results
+vary substantially by timeframe and coin: pooled native verdicts are
+1H DISCARD ; 4H INCONCLUSIVE ; 6H INCONCLUSIVE ; 1D INCONCLUSIVE, and forced 1:3 verdicts are
+1H INCONCLUSIVE ; 4H KEEP ; 6H KEEP ; 1D KEEP under this project's thresholds.
+These labels are screening criteria, not proof of future profitability.
+
+The narrow pattern range makes the fee-to-risk ratio relevant, but does not alone explain the
+timeframe/coin differences. A maker-fee scenario or wider stop would be a different execution/risk
+model and should be tested explicitly rather than assumed. Coarser bars have positive pooled results
+in this sample, but need out-of-sample and execution-resolution checks before being treated as
+evidence of a durable effect.
+
+## Strategy #10 - RSI(2) trend-filtered mean reversion
+
+**Tested:** 2026-09-25 - **Coins:** BTCUSDT+SOLUSDT+XRPUSDT - **Timeframes:** 1H, 4H, 1D - **Fees:** Bybit taker 0.055% per side - **Risk:** 1% of starting equity per trade, not compounded
+
+### 1. Rule and source
+On a closed bar t: **long** if close[t] > SMA200[t] and RSI(2)[t] < 10; **short** if close[t] < SMA200[t] and RSI(2)[t] > 90. Comparisons are strict, so equality is neither. Entry fills at bar t+1 open and the fixed 2% initial stop is measured from that actual fill (long entry x 0.98, short x 1.02), which defines 1R. **Native exit:** close a long once RSI(2) on a completed bar is strictly above 70 and a short once it is strictly below 30, filled at the next open; the stop stays armed throughout, and there is no reversal on the exit bar - the next position needs its own later qualifying signal. No take-profit, no pyramiding, at most one position per coin per timeframe. **Forced-1:3 variant:** identical entries and identical 1R with a 1R stop, 3R target and 30-bar limit, under the shared engine conventions (the stop wins intrabar ties, a bar that gaps through the stop fills at the open, and a trade still open at the end of the data is discarded rather than marked to the last close).
+
+**Provenance:** the RSI(2) short-term mean-reversion family associated with Larry Connors, *Short Term Trading Strategies That Work* (2008), and Larry Williams, *Long-Term Secrets to Short-Term Trading* (1999). Connors' commonly cited pullback is long-only and exits on a 5-day SMA, so the short mirror, the 70/30 RSI exits and the fixed 2% stop are this test's declared adaptations and are not attributed to that source as canonical. No source performance claim is assumed or reproduced.
+
+### 2. Placeholders and adaptations
+- RSI(2): Wilder recursive smoothing (alpha = 1/2, `adjust=False`), needing two close-changes before a value exists; average loss of zero with positive average gain reads 100, and both zero reads 50.
+- Trend filter: a contemporaneous, unshifted 200-bar close SMA, requiring all 200 closes.
+- Thresholds: entry 10/90, native exit 70/30, every comparison strict.
+- Initial stop: fixed 2.0% from the actual next-open fill; no trailing and no recalculation. A project risk convention, not a source parameter.
+- Execution: closed-bar decision and next-open fill; taker 0.055% each side; 1% of starting equity risked per trade, not compounded.
+- One position per coin per timeframe; no pyramiding; both long and short are traded.
+- Warmup is 201 bars on every timeframe, applied identically to the headline and to every sweep.
+- The forced 30-bar limit is the project's shared unvalidated convention, not an RSI source parameter.
+- Independent sweeps, each a fresh run that never replaces the headline: stop 1%/2%/3%, and entry pair 5/95, 10/90, 15/85 with the 70/30 exit thresholds held fixed.
+
+### 3. Lookahead audit
+| Dataset | Columns checked | Result |
+|---|---|---|
+| BTCUSDT 1D | rsi2, sma200 | PASS |
+| BTCUSDT 1H | rsi2, sma200 | PASS |
+| BTCUSDT 4H | rsi2, sma200 | PASS |
+| SOLUSDT 1D | rsi2, sma200 | PASS |
+| SOLUSDT 1H | rsi2, sma200 | PASS |
+| SOLUSDT 4H | rsi2, sma200 | PASS |
+| XRPUSDT 1D | rsi2, sma200 | PASS |
+| XRPUSDT 1H | rsi2, sma200 | PASS |
+| XRPUSDT 4H | rsi2, sma200 | PASS |
+
+**9 of 9 datasets passed.** Each indicator value at every cut bar was identical computed on truncated history and on full history.
+
+### 4. Results table
+Coins are pooled inside each timeframe; timeframes are never pooled with each other. All money figures are post-fee.
+
+| Timeframe | Exit | Trades | Days/coin | Win% | RR | R pre-fee | R post-fee | R/trade | Sharpe | Max DD % | Max DD R | Verdict |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 6789 | BTC 2346d / SOL 1778d / XRP 1932d | 58.7 | 0.62 | 126.1 | -247.3 | -0.036 | -1.36 | 243.0 | 266.8 | **DISCARD** |
+| 1H | forced-1:3 | 4700 | BTC 2346d / SOL 1778d / XRP 1932d | 36.5 | 1.70 | 196.3 | -62.2 | -0.013 | -0.20 | 88.9 | 127.5 | **DISCARD** |
+| 4H | native | 2083 | BTC 2321d / SOL 1752d / XRP 1907d | 47.6 | 1.01 | 27.1 | -87.4 | -0.042 | -0.50 | 101.6 | 134.8 | **DISCARD** |
+| 4H | forced-1:3 | 1807 | BTC 2321d / SOL 1752d / XRP 1907d | 28.7 | 2.52 | 115.1 | 15.8 | 0.009 | 0.07 | 56.6 | 109.2 | **DISCARD** |
+| 1D | native | 424 | BTC 2154d / SOL 1585d / XRP 1740d | 26.4 | 2.57 | -2.3 | -25.6 | -0.060 | -0.24 | 55.5 | 58.7 | **DISCARD** |
+| 1D | forced-1:3 | 423 | BTC 2154d / SOL 1585d / XRP 1740d | 22.5 | 2.79 | -43.0 | -66.3 | -0.157 | -0.74 | 78.3 | 79.5 | **DISCARD** |
+
+Shortest window in this run: SOLUSDT at 1D, 1585 days (4.34 years). Longest: BTCUSDT at 1H, 2346 days (6.42 years).
+
+### 5. Statistical significance
+t is each cell's mean per-trade R divided by its own standard error; roughly 2.0 is the noise threshold, and a negative result needs no such defence.
+
+| Timeframe | Exit | Trades | Pre-fee R/trade | t pre-fee | Post-fee R/trade | t post-fee | vs 2.0 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 6789 | +0.0186 | 2.04 | -0.0364 | -4.00 | reliably negative, distinguishable from noise |
+| 1H | forced-1:3 | 4700 | +0.0418 | 2.00 | -0.0132 | -0.63 | inside the range chance produces |
+| 4H | native | 2083 | +0.0130 | 0.50 | -0.0420 | -1.61 | inside the range chance produces |
+| 4H | forced-1:3 | 1807 | +0.0637 | 1.58 | +0.0087 | 0.22 | inside the range chance produces |
+| 1D | native | 424 | -0.0054 | -0.05 | -0.0604 | -0.61 | inside the range chance produces |
+| 1D | forced-1:3 | 423 | -0.1017 | -1.25 | -0.1566 | -1.93 | inside the range chance produces |
+
+### 6. Concentration
+How much of each cell's total R rests on one trade and on the best five. A negative total makes the percentage shares directionally meaningless, so read them alongside Total R.
+
+| Timeframe | Exit | Trades | Total R | Best trade | Best 5 trades | Best 5 as % of total |
+|---|---|---:|---:|---:|---:|---:|
+| 1H | native | 6789 | -247.31 | +6.96 | +27.38 | -11.1 |
+| 1H | forced-1:3 | 4700 | -62.17 | +2.95 | +14.73 | -23.7 |
+| 4H | native | 2083 | -87.40 | +5.37 | +24.58 | -28.1 |
+| 4H | forced-1:3 | 1807 | 15.78 | +2.95 | +14.73 | 93.4 |
+| 1D | native | 424 | -25.61 | +18.42 | +52.38 | -204.5 |
+| 1D | forced-1:3 | 423 | -66.26 | +2.95 | +14.73 | -22.2 |
+
+### 7. Long/short breakdown
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade, avg bars |
+|---|---|---|---:|---:|---:|---|
+| 1H | native | long | 3263 | 59.3 | -82.40 | -0.025 (3.9 bars) |
+| 1H | native | short | 3526 | 58.1 | -164.91 | -0.047 (4.0 bars) |
+| 1H | forced-1:3 | long | 2276 | 36.7 | -36.78 | -0.016 (15.7 bars) |
+| 1H | forced-1:3 | short | 2424 | 36.3 | -25.40 | -0.010 (15.9 bars) |
+| 4H | native | long | 973 | 44.9 | -104.54 | -0.107 (2.4 bars) |
+| 4H | native | short | 1110 | 50.0 | 17.14 | +0.015 (2.7 bars) |
+| 4H | forced-1:3 | long | 843 | 26.1 | -85.74 | -0.102 (6.2 bars) |
+| 4H | forced-1:3 | short | 964 | 30.9 | 101.53 | +0.105 (7.0 bars) |
+| 1D | native | long | 204 | 24.5 | -10.83 | -0.053 (1.1 bars) |
+| 1D | native | short | 220 | 28.2 | -14.78 | -0.067 (1.1 bars) |
+| 1D | forced-1:3 | long | 205 | 22.0 | -36.26 | -0.177 (1.0 bars) |
+| 1D | forced-1:3 | short | 218 | 22.9 | -30.00 | -0.138 (1.3 bars) |
+
+### 8. Exit-death and overlap
+The two exits share one entry rule and one 1R, so any difference between them is attributable to the exit alone. Overlap is the share of entry timestamps they have in common; below 85% the comparison is rerun on shared entries only.
+
+**1H.** The two variants share **66.5%** of their entry timestamps. Exit-death: **no** - the two exits land within 0.023R per trade of each other (native -0.036R vs forced 1:3 -0.013R), so the result is driven by the entry signal rather than by the choice of exit
+
+  That is below the 85% floor, so the exit comparison is rerun on the 3853 entry timestamps both variants took: native -0.018R/trade over 4860 completed trades vs forced 1:3 -0.018R/trade over 4505. Exit-death on that shared subset: **no**.
+
+**4H.** The two variants share **85.4%** of their entry timestamps. Exit-death: **yes** - the exit flips the sign of the edge: native -0.042R per trade vs forced 1:3 +0.009R. Identical entries, so the entry signal is not what decided this - the native exit is. The edge, such as it is, lives in the forced 1:3 exit.
+
+**1D.** The two variants share **99.1%** of their entry timestamps. Exit-death: **no** - the two exits land within 0.096R per trade of each other (native -0.060R vs forced 1:3 -0.157R), so the result is driven by the entry signal rather than by the choice of exit
+
+**Exit composition.**
+
+| Timeframe | Exit | Exit reasons | Avg bars held | Avg fee cost R |
+|---|---|---|---:|---:|
+| 1H | native | rsi_reversion: 4993, stop: 1796 | 4.0 | 0.055 |
+| 1H | forced-1:3 | stop: 2569, target: 651, time: 1480 | 15.8 | 0.055 |
+| 4H | native | rsi_reversion: 1042, stop: 1041 | 2.6 | 0.055 |
+| 4H | forced-1:3 | stop: 1274, target: 435, time: 98 | 6.6 | 0.055 |
+| 1D | native | rsi_reversion: 112, stop: 312 | 1.1 | 0.055 |
+| 1D | forced-1:3 | stop: 328, target: 95 | 1.1 | 0.055 |
+
+### 9. Funding
+Funding is not modelled in any return above. Settlements land every 8 hours on this venue, so holding time is the cost exposure:
+
+| Timeframe | Exit | Avg bars held | Avg holding hours | Est. settlements/trade | Est. funding R/trade @ 0.01%/8h |
+|---|---|---:|---:|---:|---:|
+| 1H | native | 4.0 | 4.0 | 0.49 | 0.002 |
+| 1H | forced-1:3 | 15.8 | 15.8 | 1.98 | 0.010 |
+| 4H | native | 2.6 | 10.3 | 1.28 | 0.006 |
+| 4H | forced-1:3 | 6.6 | 26.5 | 3.32 | 0.017 |
+| 1D | native | 1.1 | 25.9 | 3.24 | 0.016 |
+| 1D | forced-1:3 | 1.1 | 26.8 | 3.35 | 0.017 |
+
+The base rate used for that estimate is **0.010% per 8-hour settlement**, an assumed mid-range figure for this venue rather than a rate measured from the data. Position size is 50% of equity because 1% is risked against a 2% stop, which is what converts a percentage settlement into risk units.
+
+KEEP survival assessment: some cells are already profitable after fees, so funding is the difference between a marginal edge and none at all - it would erode any cell that cleared the discard bar on fees alone. Funding is unmodelled, so no verdict in this report is a claim that an edge survives carry costs, and this strategy holds shorts as well as longs, whose true cost is not captured by the fee column alone.
+
+### 10. Parameter sensitivity
+Every declared variant, favourable or not. The headline is stop 2% / entry 10/90; nothing here selects or replaces it.
+
+| Variant | Timeframe | Exit | Trades | Win% | R post-fee | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| stop 1% | 1H | native | 8227 | 47.8 | -705.7 | -0.086 | -2.20 | DISCARD |
+| stop 1% | 1H | forced-1:3 | 6991 | 28.7 | -469.4 | -0.067 | -1.06 | DISCARD |
+| stop 1% | 4H | native | 2567 | 31.8 | -276.9 | -0.108 | -0.97 | DISCARD |
+| stop 1% | 4H | forced-1:3 | 2501 | 24.8 | -310.8 | -0.124 | -1.14 | DISCARD |
+| stop 1% | 1D | native | 464 | 15.7 | -41.7 | -0.090 | -0.27 | DISCARD |
+| stop 1% | 1D | forced-1:3 | 464 | 20.3 | -139.0 | -0.300 | -1.51 | DISCARD |
+| stop 2% | 1H | native | 6789 | 58.7 | -247.3 | -0.036 | -1.36 | DISCARD |
+| stop 2% | 1H | forced-1:3 | 4700 | 36.5 | -62.2 | -0.013 | -0.20 | DISCARD |
+| stop 2% | 4H | native | 2083 | 47.6 | -87.4 | -0.042 | -0.50 | DISCARD |
+| stop 2% | 4H | forced-1:3 | 1807 | 28.7 | 15.8 | 0.009 | 0.07 | DISCARD |
+| stop 2% | 1D | native | 424 | 26.4 | -25.6 | -0.060 | -0.24 | DISCARD |
+| stop 2% | 1D | forced-1:3 | 423 | 22.5 | -66.3 | -0.157 | -0.74 | DISCARD |
+| stop 3% | 1H | native | 6230 | 61.4 | -134.2 | -0.022 | -1.05 | DISCARD |
+| stop 3% | 1H | forced-1:3 | 3890 | 42.3 | -15.3 | -0.004 | -0.07 | DISCARD |
+| stop 3% | 4H | native | 1825 | 57.5 | 5.7 | 0.003 | 0.05 | DISCARD |
+| stop 3% | 4H | forced-1:3 | 1386 | 33.3 | 68.6 | 0.050 | 0.39 | INCONCLUSIVE |
+| stop 3% | 1D | native | 379 | 36.4 | 2.6 | 0.007 | 0.03 | DISCARD |
+| stop 3% | 1D | forced-1:3 | 364 | 25.8 | -3.8 | -0.010 | -0.04 | DISCARD |
+| entry 5/95 | 1H | native | 3332 | 59.9 | -86.6 | -0.026 | -0.68 | DISCARD |
+| entry 5/95 | 1H | forced-1:3 | 2818 | 37.4 | 6.5 | 0.002 | 0.03 | DISCARD |
+| entry 5/95 | 4H | native | 1034 | 46.0 | -49.8 | -0.048 | -0.42 | DISCARD |
+| entry 5/95 | 4H | forced-1:3 | 967 | 27.5 | -36.9 | -0.038 | -0.24 | DISCARD |
+| entry 5/95 | 1D | native | 202 | 27.2 | -7.5 | -0.037 | -0.11 | DISCARD |
+| entry 5/95 | 1D | forced-1:3 | 202 | 21.8 | -37.1 | -0.184 | -0.62 | DISCARD |
+| entry 10/90 | 1H | native | 6789 | 58.7 | -247.3 | -0.036 | -1.36 | DISCARD |
+| entry 10/90 | 1H | forced-1:3 | 4700 | 36.5 | -62.2 | -0.013 | -0.20 | DISCARD |
+| entry 10/90 | 4H | native | 2083 | 47.6 | -87.4 | -0.042 | -0.50 | DISCARD |
+| entry 10/90 | 4H | forced-1:3 | 1807 | 28.7 | 15.8 | 0.009 | 0.07 | DISCARD |
+| entry 10/90 | 1D | native | 424 | 26.4 | -25.6 | -0.060 | -0.24 | DISCARD |
+| entry 10/90 | 1D | forced-1:3 | 423 | 22.5 | -66.3 | -0.157 | -0.74 | DISCARD |
+| entry 15/85 | 1H | native | 9644 | 58.9 | -400.0 | -0.041 | -1.83 | DISCARD |
+| entry 15/85 | 1H | forced-1:3 | 5882 | 36.2 | -49.6 | -0.008 | -0.14 | DISCARD |
+| entry 15/85 | 4H | native | 2993 | 47.2 | -194.8 | -0.065 | -0.95 | DISCARD |
+| entry 15/85 | 4H | forced-1:3 | 2445 | 27.4 | -63.1 | -0.026 | -0.24 | DISCARD |
+| entry 15/85 | 1D | native | 645 | 27.8 | -29.3 | -0.045 | -0.22 | DISCARD |
+| entry 15/85 | 1D | forced-1:3 | 636 | 23.9 | -63.0 | -0.099 | -0.55 | DISCARD |
+
+### 11. Market conditions
+Each cell split by the project's regime convention (trend/volatility, labelled from already-closed bars and used for reporting only, never for decisions).
+
+| Timeframe | Exit | Regime | Trades | Net R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | down/highvol | 1227 | +9.47 | +0.008 |
+| 1H | native | down/lowvol | 1214 | -20.35 | -0.017 |
+| 1H | native | range/highvol | 926 | -186.35 | -0.201 |
+| 1H | native | range/lowvol | 1075 | -122.60 | -0.114 |
+| 1H | native | up/highvol | 1192 | +72.06 | +0.060 |
+| 1H | native | up/lowvol | 1155 | +0.45 | +0.000 |
+| 1H | forced-1:3 | down/highvol | 974 | +24.71 | +0.025 |
+| 1H | forced-1:3 | down/lowvol | 713 | +16.68 | +0.023 |
+| 1H | forced-1:3 | range/highvol | 716 | -108.68 | -0.152 |
+| 1H | forced-1:3 | range/lowvol | 699 | -91.92 | -0.132 |
+| 1H | forced-1:3 | up/highvol | 904 | +86.40 | +0.096 |
+| 1H | forced-1:3 | up/lowvol | 694 | +10.63 | +0.015 |
+| 4H | native | down/highvol | 371 | +56.80 | +0.153 |
+| 4H | native | down/lowvol | 385 | +11.84 | +0.031 |
+| 4H | native | range/highvol | 263 | -63.97 | -0.243 |
+| 4H | native | range/lowvol | 372 | -99.96 | -0.269 |
+| 4H | native | up/highvol | 394 | +11.11 | +0.028 |
+| 4H | native | up/lowvol | 298 | -3.22 | -0.011 |
+| 4H | forced-1:3 | down/highvol | 351 | +33.63 | +0.096 |
+| 4H | forced-1:3 | down/lowvol | 305 | +62.31 | +0.204 |
+| 4H | forced-1:3 | range/highvol | 248 | -42.84 | -0.173 |
+| 4H | forced-1:3 | range/lowvol | 306 | -100.34 | -0.328 |
+| 4H | forced-1:3 | up/highvol | 367 | +42.00 | +0.114 |
+| 4H | forced-1:3 | up/lowvol | 230 | +21.02 | +0.091 |
+| 1D | native | down/highvol | 47 | +8.05 | +0.171 |
+| 1D | native | down/lowvol | 117 | -16.43 | -0.140 |
+| 1D | native | range/highvol | 43 | +3.52 | +0.082 |
+| 1D | native | range/lowvol | 78 | -12.82 | -0.164 |
+| 1D | native | up/highvol | 78 | -19.90 | -0.255 |
+| 1D | native | up/lowvol | 61 | +11.96 | +0.196 |
+| 1D | forced-1:3 | down/highvol | 47 | +2.43 | +0.052 |
+| 1D | forced-1:3 | down/lowvol | 115 | -33.33 | -0.290 |
+| 1D | forced-1:3 | range/highvol | 43 | -17.36 | -0.404 |
+| 1D | forced-1:3 | range/lowvol | 78 | -10.29 | -0.132 |
+| 1D | forced-1:3 | up/highvol | 78 | -22.28 | -0.286 |
+| 1D | forced-1:3 | up/lowvol | 62 | +14.58 | +0.235 |
+
+### 12. Source comparison
+The approved specification supplies no source performance numbers to reproduce, so there is no claimed return, win rate or Sharpe to check these results against. The measured numbers are those in section 4, and the honest statement is that no source comparison is available for this rule as tested.
+
+### 13. Discard-bar verdicts
+Every cell is scored against the same fixed bar, applied after fees:
+
+| Timeframe | Exit | Verdict | Criteria met or missed |
+|---|---|---|---|
+| 1H | native | **DISCARD** | post-fee expectancy -0.036R per trade is not positive; post-fee Sharpe -1.36 below 0.3; earned only -0.93x its worst drawdown.
+| 1H | forced-1:3 | **DISCARD** | post-fee expectancy -0.013R per trade is not positive; post-fee Sharpe -0.20 below 0.3; earned only -0.49x its worst drawdown. A 1:3 exit needs 26.4% wins just to cover its own fee bill; this cell measured 36.5%.
+| 4H | native | **DISCARD** | post-fee expectancy -0.042R per trade is not positive; post-fee Sharpe -0.50 below 0.3; earned only -0.65x its worst drawdown.
+| 4H | forced-1:3 | **DISCARD** | post-fee Sharpe 0.07 below 0.3; earned only 0.14x its worst drawdown. A 1:3 exit needs 26.4% wins just to cover its own fee bill; this cell measured 28.7%.
+| 1D | native | **DISCARD** | post-fee expectancy -0.060R per trade is not positive; post-fee Sharpe -0.24 below 0.3; earned only -0.44x its worst drawdown.
+| 1D | forced-1:3 | **DISCARD** | post-fee expectancy -0.157R per trade is not positive; post-fee Sharpe -0.74 below 0.3; earned only -0.83x its worst drawdown. A 1:3 exit needs 26.4% wins just to cover its own fee bill; this cell measured 22.5%.
+
+```
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+### 14. Bottom line
+Across 3 timeframes x 2 exits (6 cells) the discard bar returns **6x DISCARD**. 4 of 6 cells are profitable before fees, so the entry signal does carry a measurable mean-reversion tendency - but after 0.055% per side against a 2% stop it does not survive as an executable edge on this universe. What would change a verdict: a longer or different sample that lifts a cell's post-fee expectancy past the KEEP bar rather than merely past zero; a validated funding and slippage model rather than an unmodelled one; and out-of-sample confirmation. Nothing here is a live-trading recommendation, and no sweep result was used to reselect the headline.
+
+### 15. Files changed
+- `strategy_log.csv`: 67 -> 73 lines (+6 rows, one per timeframe x exit; sweeps add no rows).
+- `strategy_log.md`: 5125 -> 5367 lines (+242, this report as one appended section).
+- `src/s10_rsi2.py` and `src/run_s10.py`: the strategy and its runner, already on disk.
+- Nothing is deleted and no earlier strategy's entry is rewritten; both logs are append-only.
+
+---
+
+## Strategy #11 — MACD Crossover (Gerald Appel, 1979)
+
+**Tested:** 2026-09-27 · **Coins:** BTCUSDT+SOLUSDT+XRPUSDT · **Timeframes:** 1H, 4H, 1D · **Direction:** long and short
+
+### 1. Rule and source
+MACD line = 12-EMA − 26-EMA; signal = 9-EMA of the MACD line (standard exponential smoothing, alpha = 2/(span+1), `adjust=False`). On a closed bar t: **long** if the MACD line crosses above the signal line (MACD > signal now, MACD <= signal on the prior bar) AND close[t] > 200-SMA[t]; **short** on the mirror cross below with close[t] < 200-SMA. Entry fills at bar t+1 open. The initial stop is 2 x ATR(14, Wilder) measured as a fraction of the signal bar's close and resolved against the actual next-open fill price, which defines 1R. **Native exit:** close a long when MACD crosses back below the signal line, a short when it crosses back above, filled at the next open; the stop stays armed throughout; no take-profit, no pyramiding, at most one position per coin per timeframe. **Forced-1:3 variant:** identical entries and identical 1R with a 1R stop, 3R target and 30-bar time limit under the shared engine conventions (stop wins intrabar ties, a bar gapping through the stop fills at the open, a trade still open at the end of the data is discarded rather than marked to the last close).
+
+**Provenance:** Gerald Appel, *The Moving Average Convergence-Divergence Trading Method* (1979) - the original source for the indicator and the 12/26/9 parameters. The source describes MACD/signal crossovers on stock data with no universal stop and no crypto-specific exit, so the 2 x ATR(14) stop, the 200-SMA trend filter and the crypto perp execution are this test's declared adaptations, not source canon. No source performance claim is assumed or reproduced.
+
+### 2. Placeholders and adaptations
+- MACD 12/26/9: canonical Appel parameters, applied unmodified; EMA smoothing is the standard `span` convention (alpha = 2/(span+1), `adjust=False`).
+- Trend filter: a contemporaneous, unshifted 200-bar close SMA - a project addition to keep entries on the side of the longer trend, not a source parameter.
+- Initial stop: 2 x ATR(14) (Wilder SMA of true range) as a fraction of the signal bar's close, resolved against the actual next-open fill. A project extrapolation; the source defines no stop.
+- Warmup: 250 bars on every timeframe (SMA200 needs 200; margin for EMA/ATR settle-in), applied identically to the headline and every sweep.
+- Execution: closed-bar decision and next-open fill; taker 0.055% each side; 1% of starting equity risked per trade, never compounded; one position per coin per timeframe; both long and short traded.
+- The forced 30-bar limit is the project's shared unvalidated convention.
+- Funding and slippage are not modelled (section 9).
+- Independent sweeps, each a fresh run that never replaces the headline: stop 1.5x/2.5x ATR, MACD 8/21 (signal 9 fixed), SMA filter 100 and 300.
+
+### 3. Lookahead-bias audit
+The engine's standing rules: a decision on a closed bar fills at the next bar's open, and the stop wins every intrabar tie. Three specific traps checked here: (a) the MACD/signal EMAs are recursive but causal - proven by the end-truncation audit below; (b) a crossover needs the PREVIOUS bar's MACD/signal values, which are also closed-bar reads; (c) the ATR stop distance is captured from the signal bar and only translated to the actual fill price at the next open, so the fill bar's range never touches the stop level. The regime columns used in section 11 are computed from already-closed bars and are never consulted by any decision.
+
+| Dataset | Columns checked | Result |
+|---|---|---|
+| BTCUSDT 1D | macd_line, macd_signal, sma200, atr | PASS |
+| BTCUSDT 1H | macd_line, macd_signal, sma200, atr | PASS |
+| BTCUSDT 4H | macd_line, macd_signal, sma200, atr | PASS |
+| SOLUSDT 1D | macd_line, macd_signal, sma200, atr | PASS |
+| SOLUSDT 1H | macd_line, macd_signal, sma200, atr | PASS |
+| SOLUSDT 4H | macd_line, macd_signal, sma200, atr | PASS |
+| XRPUSDT 1D | macd_line, macd_signal, sma200, atr | PASS |
+| XRPUSDT 1H | macd_line, macd_signal, sma200, atr | PASS |
+| XRPUSDT 4H | macd_line, macd_signal, sma200, atr | PASS |
+
+**9 of 9 datasets passed.** Each indicator value at every cut bar (25 cut points per dataset, all past the 250-bar warmup) was identical computed on truncated history and on full history.
+
+Beyond the indicator audit, every completed trade was re-derived from the data: 12175 trades checked; the fill bar had a qualifying same-direction signal on the immediately preceding closed bar in all but 0 cases; the stop sat on the wrong side of the fill in 0 trades; 152 trades exited before entering. First-bar resolutions (where the intrabar tie-break, not the strategy, decides):
+
+- 1H: native 0.0%, forced-1:3 3.0%
+- 4H: native 0.0%, forced-1:3 3.1%
+- 1D: native 0.0%, forced-1:3 2.1%
+
+### 4. Results table
+Coins are pooled inside each timeframe; timeframes are never pooled with each other. All money figures are post-fee; the pre-fee total is shown alongside.
+
+| Timeframe | Exit type | Trades | Days of history per coin (BTC/SOL/XRP) | Win% | Reward:risk achieved | Pre-fee total R | Post-fee total R | R/trade | Sharpe | Max drawdown % | Max DD R | Verdict |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 5555 | BTC 2344d / SOL 1776d / XRP 1930d | 31.8 | 2.21 | 490.0 | 78.0 | 0.014 | 0.21 | 48.0 | 123.7 | **DISCARD** |
+| 1H | forced-1:3 | 3971 | BTC 2344d / SOL 1776d / XRP 1930d | 36.3 | 1.80 | 358.1 | 68.1 | 0.017 | 0.24 | 40.1 | 72.0 | **DISCARD** |
+| 4H | native | 1359 | BTC 2313d / SOL 1744d / XRP 1899d | 32.0 | 2.57 | 168.4 | 124.2 | 0.091 | 0.65 | 24.0 | 36.1 | **INCONCLUSIVE** |
+| 4H | forced-1:3 | 958 | BTC 2313d / SOL 1744d / XRP 1899d | 37.5 | 1.80 | 76.0 | 45.3 | 0.047 | 0.34 | 20.0 | 31.7 | **INCONCLUSIVE** |
+| 1D | native | 187 | BTC 2105d / SOL 1536d / XRP 1691d | 33.7 | 4.15 | 83.5 | 81.1 | 0.434 | 0.62 | 8.6 | 15.4 | **INCONCLUSIVE** |
+| 1D | forced-1:3 | 145 | BTC 2105d / SOL 1536d / XRP 1691d | 38.6 | 1.89 | 18.6 | 16.8 | 0.116 | 0.37 | 10.3 | 12.2 | **INCONCLUSIVE** |
+
+Shortest window in this run: Shortest window in this run: SOLUSDT at 1D, 1536 days (4.21 years). Longest: BTCUSDT at 1H, 2344 days (6.42 years).
+
+### 5. Statistical significance
+t is each cell's mean per-trade R divided by its own standard error (the same hand-rolled statistic every other strategy uses); roughly 2.0 is the noise threshold, and a negative result needs no such defence.
+
+| Timeframe | Exit | Trades | Pre-fee R/trade | t pre-fee | Post-fee R/trade | t post-fee | vs ~2.0 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 5555 | +0.0882 | +4.18 | +0.0140 | +0.67 | inside the range chance produces |
+| 1H | forced-1:3 | 3971 | +0.0902 | +3.78 | +0.0172 | +0.72 | inside the range chance produces |
+| 4H | native | 1359 | +0.1239 | +2.54 | +0.0914 | +1.87 | inside the range chance produces |
+| 4H | forced-1:3 | 958 | +0.0793 | +1.67 | +0.0473 | +1.00 | inside the range chance produces |
+| 1D | native | 187 | +0.4463 | +1.54 | +0.4338 | +1.49 | inside the range chance produces |
+| 1D | forced-1:3 | 145 | +0.1282 | +0.99 | +0.1161 | +0.90 | inside the range chance produces |
+
+### 6. Concentration
+How much of each cell's total R rests on one trade and on the best five. A negative total makes the percentage shares directionally meaningless, so read them alongside Total R.
+
+| Timeframe | Exit | Trades | Total R | Best trade | Best 5 as % of total | Total R ex-best-5 | Profitable ex-best-5? |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 5555 | +78.01 | +19.59 | 113.9 | -10.87 | no |
+| 1H | forced-1:3 | 3971 | +68.13 | +2.99 | 21.9 | +53.20 | yes |
+| 4H | native | 1359 | +124.20 | +24.46 | 68.5 | +39.06 | yes |
+| 4H | forced-1:3 | 958 | +45.28 | +2.99 | 33.0 | +30.34 | yes |
+| 1D | native | 187 | +81.11 | +49.59 | 98.0 | +1.65 | yes |
+| 1D | forced-1:3 | 145 | +16.83 | +2.99 | 88.8 | +1.88 | yes |
+
+### 7. Long/short breakdown
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 2682 | 31.1 | +155.38 | +0.058 |
+| 1H | native | short | 2873 | 32.4 | -77.37 | -0.027 |
+| 1H | forced-1:3 | long | 1894 | 36.2 | +51.56 | +0.027 |
+| 1H | forced-1:3 | short | 2077 | 36.4 | +16.57 | +0.008 |
+| 4H | native | long | 637 | 32.0 | +142.57 | +0.224 |
+| 4H | native | short | 722 | 32.0 | -18.37 | -0.025 |
+| 4H | forced-1:3 | long | 453 | 35.3 | +18.58 | +0.041 |
+| 4H | forced-1:3 | short | 505 | 39.4 | +26.70 | +0.053 |
+| 1D | native | long | 93 | 32.3 | +67.25 | +0.723 |
+| 1D | native | short | 94 | 35.1 | +13.86 | +0.147 |
+| 1D | forced-1:3 | long | 72 | 37.5 | +13.97 | +0.194 |
+| 1D | forced-1:3 | short | 73 | 39.7 | +2.87 | +0.039 |
+
+### 8. Exit-death and overlap
+The two exits share one entry rule and one 1R, so any difference between them is attributable to the exit alone. Overlap is the share of entry timestamps they have in common; below 85% the comparison is rerun on shared entries only.
+
+- **1H: overlap 72.5%, exit-death flag: no.** the two exits land within 0.003R per trade of each other (native +0.014R vs forced 1:3 +0.017R), so the result is driven by the entry signal rather than by the choice of exit
+  - Below the 85% floor, so the comparison is rerun on the 4149 entries both exits share: native +0.008R/trade (DISCARD, post-fee Sharpe 0.10 below 0.3; earned only 0.42x its worst drawdown); forced-1:3 +0.017R/trade (DISCARD, post-fee Sharpe 0.24 below 0.3). Shared-entries verdicts: DISCARD / DISCARD.
+- **4H: overlap 71.6%, exit-death flag: no.** the two exits land within 0.044R per trade of each other (native +0.091R vs forced 1:3 +0.047R), so the result is driven by the entry signal rather than by the choice of exit
+  - Below the 85% floor, so the comparison is rerun on the 997 entries both exits share: native +0.086R/trade (INCONCLUSIVE, positive but short of the KEEP bar: expectancy +0.086R < +0.10R; Sharpe 0.51 < 0.7); forced-1:3 +0.048R/trade (INCONCLUSIVE, positive but short of the KEEP bar: expectancy +0.048R < +0.10R; Sharpe 0.35 < 0.7; R-recovery 1.46 < 1.5). Shared-entries verdicts: INCONCLUSIVE / INCONCLUSIVE.
+- **1D: overlap 78.8%, exit-death flag: yes.** both exits agree on direction but differ by 0.318R per trade (native +0.434R vs forced 1:3 +0.116R), which is larger than the entire +0.10R KEEP requirement. The native exit is doing more work than the entry signal.
+  - Below the 85% floor, so the comparison is rerun on the 150 entries both exits share: native +0.562R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.65 < 0.7); forced-1:3 +0.116R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.37 < 0.7; R-recovery 1.38 < 1.5). Shared-entries verdicts: INCONCLUSIVE / INCONCLUSIVE.
+
+**Exit composition.**
+
+| Timeframe | Exit | Exit reasons | Avg bars held | Avg fee cost R |
+|---|---|---|---:|---:|
+| 1H | native | macd cross above signal: 2873, macd cross below signal: 2682 | 10.5 | 0.074 |
+| 1H | forced-1:3 | stop: 2212, target: 640, time: 1119 | 15.9 | 0.073 |
+| 4H | native | macd cross above signal: 722, macd cross below signal: 637 | 10.4 | 0.033 |
+| 4H | forced-1:3 | stop: 529, target: 140, time: 289 | 16.4 | 0.032 |
+| 1D | native | macd cross above signal: 94, macd cross below signal: 93 | 11.5 | 0.012 |
+| 1D | forced-1:3 | stop: 86, target: 23, time: 36 | 15.7 | 0.012 |
+
+### 9. Funding disclosure
+Funding is not modelled in any return above. Settlements land every 8 hours on this venue, so holding time is the cost exposure. The stop distance varies per trade (2 x ATR), so the position multiple varies with it: notional = 1R / stop fraction, and a percentage settlement converts to R at that multiple.
+
+| Timeframe | Exit | Avg bars held | Avg holding hours | Settlements/trade | Median stop (% of price) | Est. funding R/trade @ base 0.01% |
+|---|---|---:|---:|---:|---:|---:|
+| 1H | native | 10.5 | 10.5 | 1.3 | 1.79% | 0.007 |
+| 1H | forced-1:3 | 15.9 | 15.9 | 2.0 | 1.82% | 0.011 |
+| 4H | native | 10.4 | 41.5 | 5.2 | 3.79% | 0.014 |
+| 4H | forced-1:3 | 16.4 | 65.4 | 8.2 | 3.87% | 0.021 |
+| 1D | native | 11.5 | 275.0 | 34.4 | 9.28% | 0.037 |
+| 1D | forced-1:3 | 15.7 | 377.2 | 47.2 | 9.34% | 0.051 |
+
+No cell in this run reaches the KEEP bar on the measured (fee-only) numbers, so no verdict here has a funding bill that can flip it. For the record: at the base rate of 0.01% per 8-hour settlement the estimated funding cost is the last column of the table above per trade - it would erode any future KEEP that spans settlements, and it cannot rescue a losing cell.
+
+### 10. Parameter sensitivity
+Every declared variant, favourable or not, run exactly like the headline. The headline is MACD 12/26/9, 200-SMA filter, 2.0x ATR stop; nothing here selects or replaces it. The signal EMA (9) is held fixed per the specification, which declares fast/slow and stop as the swept parameters.
+
+| Variant | Timeframe | Exit | Trades | Win% | R total | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| native | 1H | native | 5555 | 31.8 | 78.0 | 0.014 | 0.21 | **DISCARD** |
+| forced-1:3 | 1H | forced-1:3 | 3971 | 36.3 | 68.1 | 0.017 | 0.24 | **DISCARD** |
+| native | 4H | native | 1359 | 32.0 | 124.2 | 0.091 | 0.65 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 958 | 37.5 | 45.3 | 0.047 | 0.34 | **INCONCLUSIVE** |
+| native | 1D | native | 187 | 33.7 | 81.1 | 0.434 | 0.62 | **INCONCLUSIVE** |
+| forced-1:3 | 1D | forced-1:3 | 145 | 38.6 | 16.8 | 0.116 | 0.37 | **INCONCLUSIVE** |
+| native | 1H | native | 5555 | 31.8 | 104.0 | 0.019 | 0.21 | **DISCARD** |
+| forced-1:3 | 1H | forced-1:3 | 4492 | 32.5 | 18.1 | 0.004 | 0.05 | **DISCARD** |
+| native | 4H | native | 1359 | 32.0 | 165.6 | 0.122 | 0.65 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 1082 | 32.5 | 36.3 | 0.034 | 0.23 | **DISCARD** |
+| native | 1D | native | 187 | 33.7 | 108.2 | 0.578 | 0.62 | **INCONCLUSIVE** |
+| forced-1:3 | 1D | forced-1:3 | 157 | 35.0 | 22.9 | 0.146 | 0.41 | **INCONCLUSIVE** |
+| native | 1H | native | 5555 | 31.8 | 62.4 | 0.011 | 0.21 | **DISCARD** |
+| forced-1:3 | 1H | forced-1:3 | 3652 | 39.2 | 70.9 | 0.019 | 0.28 | **DISCARD** |
+| native | 4H | native | 1359 | 32.0 | 99.4 | 0.073 | 0.65 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 881 | 41.5 | 56.8 | 0.064 | 0.48 | **INCONCLUSIVE** |
+| native | 1D | native | 187 | 33.7 | 64.9 | 0.347 | 0.62 | **INCONCLUSIVE** |
+| forced-1:3 | 1D | forced-1:3 | 135 | 42.2 | 12.6 | 0.093 | 0.30 | **DISCARD** |
+| native | 1H | native | 6888 | 31.8 | -42.6 | -0.006 | -0.12 | **DISCARD** |
+| forced-1:3 | 1H | forced-1:3 | 4475 | 37.0 | 96.3 | 0.022 | 0.32 | **INCONCLUSIVE** |
+| native | 4H | native | 1624 | 33.6 | 115.0 | 0.071 | 0.65 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 1068 | 36.7 | 39.0 | 0.037 | 0.28 | **DISCARD** |
+| native | 1D | native | 232 | 36.2 | 53.8 | 0.232 | 0.81 | **KEEP** |
+| forced-1:3 | 1D | forced-1:3 | 165 | 33.9 | 1.0 | 0.006 | 0.02 | **DISCARD** |
+| native | 1H | native | 5537 | 31.2 | 178.2 | 0.032 | 0.47 | **INCONCLUSIVE** |
+| forced-1:3 | 1H | forced-1:3 | 3842 | 35.9 | 66.3 | 0.017 | 0.24 | **DISCARD** |
+| native | 4H | native | 1378 | 31.5 | 82.4 | 0.060 | 0.45 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 939 | 35.4 | -19.2 | -0.020 | -0.15 | **DISCARD** |
+| native | 1D | native | 188 | 32.4 | 14.0 | 0.075 | 0.24 | **DISCARD** |
+| forced-1:3 | 1D | forced-1:3 | 138 | 36.2 | -0.5 | -0.003 | -0.01 | **DISCARD** |
+| native | 1H | native | 5570 | 31.9 | 17.2 | 0.003 | 0.05 | **DISCARD** |
+| forced-1:3 | 1H | forced-1:3 | 4051 | 36.1 | 6.7 | 0.002 | 0.02 | **DISCARD** |
+| native | 4H | native | 1379 | 31.9 | 67.0 | 0.049 | 0.37 | **INCONCLUSIVE** |
+| forced-1:3 | 4H | forced-1:3 | 990 | 35.9 | 2.3 | 0.002 | 0.02 | **DISCARD** |
+| native | 1D | native | 184 | 34.8 | 39.0 | 0.212 | 0.72 | **KEEP** |
+| forced-1:3 | 1D | forced-1:3 | 141 | 41.8 | 22.8 | 0.162 | 0.50 | **INCONCLUSIVE** |
+
+### 11. Market conditions
+Each cell split by the project's regime convention (trend/volatility, labelled from already-closed bars and used for reporting only, never for decisions). The source's claimed condition is a trending market, entered in the direction of the 200-SMA filter.
+
+| Timeframe | Exit | Regime | Trades | Net R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | down/highvol | 963 | +37.84 | +0.039 |
+| 1H | native | down/lowvol | 1168 | -47.19 | -0.040 |
+| 1H | native | range/highvol | 548 | -58.59 | -0.107 |
+| 1H | native | range/lowvol | 787 | -30.53 | -0.039 |
+| 1H | native | up/highvol | 899 | +52.32 | +0.058 |
+| 1H | native | up/lowvol | 1190 | +124.16 | +0.104 |
+| 1H | forced-1:3 | down/highvol | 721 | +37.15 | +0.052 |
+| 1H | forced-1:3 | down/lowvol | 801 | +3.26 | +0.004 |
+| 1H | forced-1:3 | range/highvol | 418 | -35.42 | -0.085 |
+| 1H | forced-1:3 | range/lowvol | 573 | -11.55 | -0.020 |
+| 1H | forced-1:3 | up/highvol | 661 | +53.24 | +0.081 |
+| 1H | forced-1:3 | up/lowvol | 797 | +21.46 | +0.027 |
+| 4H | native | down/highvol | 238 | -24.90 | -0.105 |
+| 4H | native | down/lowvol | 335 | +13.34 | +0.040 |
+| 4H | native | range/highvol | 94 | -3.47 | -0.037 |
+| 4H | native | range/lowvol | 182 | -23.41 | -0.129 |
+| 4H | native | up/highvol | 228 | +60.41 | +0.265 |
+| 4H | native | up/lowvol | 282 | +102.23 | +0.363 |
+| 4H | forced-1:3 | down/highvol | 170 | +6.71 | +0.039 |
+| 4H | forced-1:3 | down/lowvol | 212 | +16.66 | +0.079 |
+| 4H | forced-1:3 | range/highvol | 77 | -3.01 | -0.039 |
+| 4H | forced-1:3 | range/lowvol | 143 | -12.45 | -0.087 |
+| 4H | forced-1:3 | up/highvol | 177 | +25.49 | +0.144 |
+| 4H | forced-1:3 | up/lowvol | 179 | +11.87 | +0.066 |
+| 1D | native | down/highvol | 28 | -2.80 | -0.100 |
+| 1D | native | down/lowvol | 52 | +60.04 | +1.155 |
+| 1D | native | range/highvol | 11 | -3.86 | -0.351 |
+| 1D | native | range/lowvol | 25 | +5.39 | +0.216 |
+| 1D | native | up/highvol | 23 | +5.84 | +0.254 |
+| 1D | native | up/lowvol | 48 | +16.51 | +0.344 |
+| 1D | forced-1:3 | down/highvol | 23 | -1.61 | -0.070 |
+| 1D | forced-1:3 | down/lowvol | 40 | -1.42 | -0.035 |
+| 1D | forced-1:3 | range/highvol | 10 | -4.30 | -0.430 |
+| 1D | forced-1:3 | range/lowvol | 19 | +11.08 | +0.583 |
+| 1D | forced-1:3 | up/highvol | 17 | +8.75 | +0.515 |
+| 1D | forced-1:3 | up/lowvol | 36 | +4.34 | +0.121 |
+
+### 12. Source comparison
+The source is the original inventor's 1979 booklet, which specifies MACD 12/26/9 with signal-line crossovers and makes qualitative claims - that MACD times trend changes and that signal-line crosses catch them early. It publishes no win rate, no reward-to-risk ratio, no Sharpe, and no drawdown figures, and it predates crypto, fees of 0.055% per side, and perp funding entirely. So there is no claimed performance number to reproduce; the only testable source claim is directional. Section 11 checks it: crossover entries do trade with the declared trend (the 200-SMA filter enforces that by construction), and the question this report answers is whether the edge survives costs on this universe - the source gives no basis for any stronger comparison. Sourcing strength: primary and original for the rule, silent on everything this project measures.
+
+### 13. Discard-bar verdicts
+Every cell is scored against the same fixed bar, applied after fees:
+
+| Timeframe | Exit | Verdict | Criteria met or missed |
+|---|---|---|---|
+| 1H | native | **DISCARD** | post-fee Sharpe 0.21 below 0.3. |
+| 1H | forced-1:3 | **DISCARD** | post-fee Sharpe 0.24 below 0.3. A 1:3 exit needs 26.8% wins just to cover its own fee bill; this cell measured 36.3%. |
+| 4H | native | **INCONCLUSIVE** | positive but short of the KEEP bar: expectancy +0.091R < +0.10R; Sharpe 0.65 < 0.7. |
+| 4H | forced-1:3 | **INCONCLUSIVE** | positive but short of the KEEP bar: expectancy +0.047R < +0.10R; Sharpe 0.34 < 0.7; R-recovery 1.43 < 1.5. A 1:3 exit needs 25.8% wins just to cover its own fee bill; this cell measured 37.5%. |
+| 1D | native | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.62 < 0.7. |
+| 1D | forced-1:3 | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.37 < 0.7; R-recovery 1.38 < 1.5. A 1:3 exit needs 25.3% wins just to cover its own fee bill; this cell measured 38.6%. |
+
+```
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+### 14. Bottom line
+Across 3 timeframes x 2 exits (6 cells) the discard bar returns **4x INCONCLUSIVE, 2x DISCARD**. What would change a verdict: a longer or different sample that lifts a cell's post-fee expectancy past the KEEP bar rather than merely past zero; a validated funding and slippage model rather than an unmodelled one; and out-of-sample confirmation. Nothing here is a live-trading recommendation, and no sweep result was used to reselect the headline.
+
+### 15. Files changed
+- `strategy_log.csv`: 73 -> 79 lines (+6 rows, one per timeframe x exit; sweeps add no rows).
+- `strategy_log.md`: 5367 -> 5616 lines (+249, this report as one appended section).
+- This is a RE-DO of Strategy #11: the earlier five-section stub (logged 2026-09-26 at strategy_log.md lines 5368-5446 and strategy_log.csv rows 74-79) was removed and replaced by this complete report. Strategies #1-#10 are byte-for-byte untouched, and the front-page master verdict index is left as last written for strategies #1-#8.
+- `src/s11_macd_crossover.py` and `src/run_s11.py`: the strategy and its runner, already on disk; the runner no longer needs scipy.
+- The `master verdict index` front matter was last updated at Strategy #8 and is left untouched, consistent with how #9 and #10 were logged.
+
+---
+
+## Strategy #12 - Parabolic SAR Reversal (J. Welles Wilder Jr., 1978)
+
+**Tested:** 2026-09-27 · **Coins:** BTCUSDT+SOLUSDT+XRPUSDT · **Timeframes:** 1H, 4H, 1D · **Direction:** long and short
+
+### 1. Rule and source
+The Parabolic Time/Price System (Wilder 1978). The SAR (stop-and-reverse) level ratchets toward price as a trend extends: SAR = prior SAR + AF x (EP - SAR), where EP is the running extreme of the current trend and AF starts at the step (0.02), rises 0.02 per new extreme, and is capped at 0.20. On a closed bar t: **long** if close[t] crosses above the active SAR (close > SAR[t], close <= SAR on the prior bar); **short** on the mirror cross below. Entry fills at bar t+1 open. **Initial stop:** the signal bar's active SAR, an absolute level that defines 1R against the actual fill price. **Native exit:** the SAR itself - a bar that trades through the SAR stops the trade at the SAR (or at the open if the bar gapped through), and a close on the wrong side of the SAR closes the trade at the next open; no take-profit. **Forced-1:3 variant:** identical entries and identical 1R with a 1R stop, 3R target and 30-bar time limit under the shared engine conventions (stop wins intrabar ties, a trade still open at the end of the data is discarded rather than marked to the last close).
+
+**Initialization (spec section 2):** direction seeded from the first two closed bars (close[1] vs close[0]); initial SAR at the opposite extreme of those two bars, EP at the trend extreme, AF at the step; long SAR clamped below the prior two lows, short SAR above the prior two highs; the seed uses only bars 0-1 and is never backfilled from the full sample.
+
+**Provenance:** J. Welles Wilder Jr., *New Concepts in Technical Trading Systems* (1978), Parabolic Time/Price System - the original source for the indicator and the 0.02/0.02/0.20 parameters. The source's system is stop-and-REVERSE (always in the market); this test requires a fresh close-cross to enter and otherwise stands flat, which is a declared adaptation. No source performance claim is assumed or reproduced.
+
+### 2. Placeholders and adaptations
+- AF step 0.02, increment 0.02, max 0.20: canonical Wilder values, applied unmodified (sweeps in section 10).
+- Entry requires a fresh close-vs-SAR cross rather than continuous reversal positioning; the reversal leg of the source system executes at the next open under the shared engine, never same-bar (spec section 6).
+- Initial stop: the signal bar's active SAR as an absolute price level, resolved against the actual next-open fill. This is source-native (the SAR is the system's stop), not an extrapolation; the 1R risk convention is project scaffolding.
+- Warmup: 250 bars on every timeframe (the SAR seed needs only 3 bars, but the shared warmup keeps every strategy comparable), applied identically to the headline and every sweep.
+- Execution: closed-bar decision and next-open fill; taker 0.055% each side; 1% of starting equity risked per trade, never compounded; one position per coin per timeframe; both long and short traded.
+- The forced 30-bar limit is the project's shared unvalidated convention.
+- Funding and slippage are not modelled (section 9).
+- Independent sweeps, each a fresh run that never replaces the headline: step 0.01/0.03 (max 0.20 fixed), max AF 0.10/0.30 (step 0.02 fixed).
+
+### 3. Lookahead-bias audit
+The engine's standing rules: a decision on a closed bar fills at the next bar's open, and the stop wins every intrabar tie. Three specific traps checked here: (a) the SAR is recursive but causal - every bar's value is a function of closed bars only, seeded from the first two bars and never backfilled - proven by the end-truncation audit below; (b) a fresh cross needs the PREVIOUS bar's SAR and close, both closed-bar reads, and a bar's own high/low updates EP/AF only after that bar closes, so every value a decision reads was knowable when the bar closed; (c) the SAR stop level is captured from the signal bar and translated to the actual fill price at the next open, so the fill bar's range never touches the stop level. The regime columns used in section 11 are computed from already-closed bars and are never consulted by any decision.
+
+| Dataset | Columns checked | Result |
+|---|---|---|
+| BTCUSDT 1D | sar, sar_stop, sar_valid, sar_dir | PASS |
+| BTCUSDT 1H | sar, sar_stop, sar_valid, sar_dir | PASS |
+| BTCUSDT 4H | sar, sar_stop, sar_valid, sar_dir | PASS |
+| SOLUSDT 1D | sar, sar_stop, sar_valid, sar_dir | PASS |
+| SOLUSDT 1H | sar, sar_stop, sar_valid, sar_dir | PASS |
+| SOLUSDT 4H | sar, sar_stop, sar_valid, sar_dir | PASS |
+| XRPUSDT 1D | sar, sar_stop, sar_valid, sar_dir | PASS |
+| XRPUSDT 1H | sar, sar_stop, sar_valid, sar_dir | PASS |
+| XRPUSDT 4H | sar, sar_stop, sar_valid, sar_dir | PASS |
+
+**9 of 9 datasets passed.** Each indicator value at every cut bar (25 cut points per dataset, all past the 250-bar warmup) was identical computed on truncated history and on full history.
+
+Beyond the indicator audit, every completed trade was re-derived from the data: 21494 trades checked; the fill bar had a qualifying same-direction SAR cross on the immediately preceding closed bar in all but 0 cases; the stop sat on the wrong side of the fill in 0 trades; 714 trades exited before entering. First-bar resolutions (where the intrabar tie-break, not the strategy, decides):
+
+- 1H: native 3.2%, forced-1:3 3.8%
+- 4H: native 2.9%, forced-1:3 3.8%
+- 1D: native 2.2%, forced-1:3 4.2%
+
+### 4. Results table
+Coins are pooled inside each timeframe; timeframes are never pooled with each other. All money figures are post-fee; the pre-fee total is shown alongside.
+
+| Timeframe | Exit type | Trades | Days of history per coin (BTC/SOL/XRP) | Win% | Reward:risk achieved | Pre-fee total R | Post-fee total R | R/trade | Sharpe | Max drawdown % | Max DD R | Verdict |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 11303 | BTC 2344d / SOL 1776d / XRP 1930d | 35.2 | 1.88 | 897.1 | 110.4 | 0.010 | 0.15 | 68.8 | 175.0 | **DISCARD** |
+| 1H | forced-1:3 | 5515 | BTC 2344d / SOL 1776d / XRP 1930d | 38.7 | 1.50 | 226.1 | -163.3 | -0.030 | -0.59 | 174.6 | 195.1 | **DISCARD** |
+| 4H | native | 2752 | BTC 2313d / SOL 1744d / XRP 1899d | 37.8 | 1.80 | 196.0 | 101.2 | 0.037 | 0.49 | 36.3 | 54.3 | **INCONCLUSIVE** |
+| 4H | forced-1:3 | 1332 | BTC 2313d / SOL 1744d / XRP 1899d | 38.3 | 1.59 | 36.4 | -11.1 | -0.008 | -0.08 | 46.1 | 66.7 | **DISCARD** |
+| 1D | native | 401 | BTC 2105d / SOL 1536d / XRP 1691d | 37.7 | 2.25 | 57.3 | 52.7 | 0.132 | 0.59 | 12.6 | 17.7 | **INCONCLUSIVE** |
+| 1D | forced-1:3 | 191 | BTC 2105d / SOL 1536d / XRP 1691d | 41.4 | 1.51 | 8.6 | 6.4 | 0.034 | 0.15 | 24.4 | 25.0 | **DISCARD** |
+
+Shortest window in this run: Shortest window in this run: SOLUSDT at 1D, 1536 days (4.21 years). Longest: BTCUSDT at 1H, 2344 days (6.42 years).
+
+### 5. Statistical significance
+t is each cell's mean per-trade R divided by its own standard error (the same hand-rolled statistic every other strategy uses); roughly 2.0 is the noise threshold, and a negative result needs no such defence.
+
+| Timeframe | Exit | Trades | Pre-fee R/trade | t pre-fee | Post-fee R/trade | t post-fee | vs ~2.0 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 11303 | +0.0794 | +3.38 | +0.0098 | +0.42 | inside the range chance produces |
+| 1H | forced-1:3 | 5515 | +0.0410 | +2.29 | -0.0296 | -1.64 | inside the range chance produces |
+| 4H | native | 2752 | +0.0712 | +2.57 | +0.0368 | +1.35 | inside the range chance produces |
+| 4H | forced-1:3 | 1332 | +0.0274 | +0.76 | -0.0083 | -0.23 | inside the range chance produces |
+| 1D | native | 401 | +0.1430 | +1.50 | +0.1315 | +1.38 | inside the range chance produces |
+| 1D | forced-1:3 | 191 | +0.0449 | +0.48 | +0.0338 | +0.36 | inside the range chance produces |
+
+### 6. Concentration
+How much of each cell's total R rests on one trade and on the best five. A negative total makes the percentage shares directionally meaningless, so read them alongside Total R.
+
+| Timeframe | Exit | Trades | Total R | Best trade | Best 5 as % of total | Total R ex-best-5 | Profitable ex-best-5? |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 11303 | +110.41 | +165.83 | 376.6 | -305.43 | no |
+| 1H | forced-1:3 | 5515 | -163.31 | +2.99 | -9.1 | -178.23 | n/a (negative total) |
+| 4H | native | 2752 | +101.25 | +29.63 | 85.7 | +14.52 | yes |
+| 4H | forced-1:3 | 1332 | -11.10 | +2.99 | -134.7 | -26.04 | n/a (negative total) |
+| 1D | native | 401 | +52.74 | +29.72 | 110.7 | -5.66 | no |
+| 1D | forced-1:3 | 191 | +6.45 | +2.99 | 232.0 | -8.51 | no |
+
+### 7. Long/short breakdown
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 5652 | 35.2 | +328.62 | +0.058 |
+| 1H | native | short | 5651 | 35.3 | -218.22 | -0.039 |
+| 1H | forced-1:3 | long | 2739 | 38.9 | -91.00 | -0.033 |
+| 1H | forced-1:3 | short | 2776 | 38.4 | -72.30 | -0.026 |
+| 4H | native | long | 1375 | 38.0 | +112.47 | +0.082 |
+| 4H | native | short | 1377 | 37.5 | -11.22 | -0.008 |
+| 4H | forced-1:3 | long | 682 | 38.6 | +11.61 | +0.017 |
+| 4H | forced-1:3 | short | 650 | 38.0 | -22.70 | -0.035 |
+| 1D | native | long | 201 | 38.3 | +55.91 | +0.278 |
+| 1D | native | short | 200 | 37.0 | -3.18 | -0.016 |
+| 1D | forced-1:3 | long | 103 | 38.8 | +7.99 | +0.078 |
+| 1D | forced-1:3 | short | 88 | 44.3 | -1.54 | -0.018 |
+
+### 8. Exit-death and overlap
+The two exits share one entry rule and one 1R, so any difference between them is attributable to the exit alone. Overlap is the share of entry timestamps they have in common; below 85% the comparison is rerun on shared entries only.
+
+- **1H: overlap 52.5%, exit-death flag: yes.** the exit flips the sign of the edge: native +0.010R per trade vs forced 1:3 -0.030R. Identical entries, so the entry signal is not what decided this - the forced 1:3 exit is. The edge, such as it is, lives in the native exit.
+  - Below the 85% floor, so the comparison is rerun on the 6373 entries both exits share: native +0.045R/trade (INCONCLUSIVE, positive but short of the KEEP bar: expectancy +0.045R < +0.10R; Sharpe 0.43 < 0.7); forced-1:3 -0.030R/trade (DISCARD, post-fee expectancy -0.030R per trade is not positive; post-fee Sharpe -0.59 below 0.3; earned only -0.84x its worst drawdown). Shared-entries verdicts: INCONCLUSIVE / DISCARD.
+- **4H: overlap 52.2%, exit-death flag: yes.** the exit flips the sign of the edge: native +0.037R per trade vs forced 1:3 -0.008R. Identical entries, so the entry signal is not what decided this - the forced 1:3 exit is. The edge, such as it is, lives in the native exit.
+  - Below the 85% floor, so the comparison is rerun on the 1539 entries both exits share: native +0.044R/trade (INCONCLUSIVE, positive but short of the KEEP bar: expectancy +0.044R < +0.10R; Sharpe 0.47 < 0.7); forced-1:3 -0.008R/trade (DISCARD, post-fee expectancy -0.008R per trade is not positive; post-fee Sharpe -0.08 below 0.3; earned only -0.17x its worst drawdown). Shared-entries verdicts: INCONCLUSIVE / DISCARD.
+- **1D: overlap 51.2%, exit-death flag: no.** the two exits land within 0.098R per trade of each other (native +0.132R vs forced 1:3 +0.034R), so the result is driven by the entry signal rather than by the choice of exit
+  - Below the 85% floor, so the comparison is rerun on the 220 entries both exits share: native +0.188R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.50 < 0.7); forced-1:3 +0.034R/trade (DISCARD, post-fee Sharpe 0.15 below 0.3; earned only 0.26x its worst drawdown). Shared-entries verdicts: INCONCLUSIVE / DISCARD.
+
+**Exit composition.** The native exit reasons here are the engine's: a bar trading through the SAR is a stop at the SAR; a close on the wrong side of the SAR exits at the next open.
+
+| Timeframe | Exit | Exit reasons | Avg bars held | Avg fee cost R |
+|---|---|---|---:|---:|
+| 1H | native | stop: 11303 | 11.8 | 0.070 |
+| 1H | forced-1:3 | stop: 2637, target: 602, time: 2276 | 18.4 | 0.071 |
+| 4H | native | stop: 2752 | 11.9 | 0.034 |
+| 4H | forced-1:3 | stop: 642, target: 130, time: 560 | 18.8 | 0.036 |
+| 1D | native | stop: 401 | 12.2 | 0.011 |
+| 1D | forced-1:3 | stop: 92, target: 18, time: 81 | 19.5 | 0.011 |
+
+### 9. Funding disclosure
+Funding is not modelled in any return above. Settlements land every 8 hours on this venue, so holding time is the cost exposure. The stop distance varies per trade with the SAR's distance from price, so the position multiple varies with it: notional = 1R / stop fraction, and a percentage settlement converts to R at that multiple. Early-trend SAR distances can be small, which both raises this exposure and is disclosed by the median stop column.
+
+| Timeframe | Exit | Avg bars held | Avg holding hours | Settlements/trade | Median stop (% of price) | Est. funding R/trade @ base 0.01% |
+|---|---|---:|---:|---:|---:|---:|
+| 1H | native | 11.8 | 11.8 | 1.5 | 2.13% | 0.007 |
+| 1H | forced-1:3 | 18.4 | 18.4 | 2.3 | 2.16% | 0.011 |
+| 4H | native | 11.9 | 47.8 | 6.0 | 4.43% | 0.013 |
+| 4H | forced-1:3 | 18.8 | 75.1 | 9.4 | 4.48% | 0.021 |
+| 1D | native | 12.2 | 292.3 | 36.5 | 12.13% | 0.030 |
+| 1D | forced-1:3 | 19.5 | 466.8 | 58.4 | 12.34% | 0.047 |
+
+No cell in this run reaches the KEEP bar on the measured (fee-only) numbers, so no verdict here has a funding bill that can flip it. For the record: at the base rate of 0.01% per 8-hour settlement the estimated funding cost is the last column of the table above per trade - it would erode any future KEEP that spans settlements, and it cannot rescue a losing cell.
+
+### 10. Parameter sensitivity
+The spec's declared sweeps, favourable or not, each run exactly like the headline: AF step 0.01/0.03 with max 0.20 fixed, and max AF 0.10/0.30 with step 0.02 fixed. The headline is step 0.02 / max 0.20; nothing here selects or replaces it.
+
+| Variant | Timeframe | Exit | Trades | Win% | R total | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| headline: step 0.02, max AF 0.20 | 1H | native | 11303 | 35.2 | 110.4 | 0.010 | 0.15 | **DISCARD** |
+| headline: step 0.02, max AF 0.20 | 1H | forced-1:3 | 5515 | 38.7 | -163.3 | -0.030 | -0.59 | **DISCARD** |
+| headline: step 0.02, max AF 0.20 | 4H | native | 2752 | 37.8 | 101.2 | 0.037 | 0.49 | **INCONCLUSIVE** |
+| headline: step 0.02, max AF 0.20 | 4H | forced-1:3 | 1332 | 38.3 | -11.1 | -0.008 | -0.08 | **DISCARD** |
+| headline: step 0.02, max AF 0.20 | 1D | native | 401 | 37.7 | 52.7 | 0.132 | 0.59 | **INCONCLUSIVE** |
+| headline: step 0.02, max AF 0.20 | 1D | forced-1:3 | 191 | 41.4 | 6.4 | 0.034 | 0.15 | **DISCARD** |
+| step 0.01 (max 0.20 fixed) | 1H | native | 6902 | 36.9 | 203.1 | 0.029 | 0.37 | **INCONCLUSIVE** |
+| step 0.01 (max 0.20 fixed) | 1H | forced-1:3 | 4223 | 42.1 | -26.0 | -0.006 | -0.12 | **DISCARD** |
+| step 0.01 (max 0.20 fixed) | 4H | native | 1698 | 37.3 | 93.3 | 0.055 | 0.54 | **INCONCLUSIVE** |
+| step 0.01 (max 0.20 fixed) | 4H | forced-1:3 | 1023 | 42.1 | 48.1 | 0.047 | 0.46 | **INCONCLUSIVE** |
+| step 0.01 (max 0.20 fixed) | 1D | native | 243 | 35.0 | 29.6 | 0.122 | 0.49 | **INCONCLUSIVE** |
+| step 0.01 (max 0.20 fixed) | 1D | forced-1:3 | 149 | 48.3 | 14.4 | 0.097 | 0.40 | **INCONCLUSIVE** |
+| step 0.03 (max 0.20 fixed) | 1H | native | 14980 | 33.6 | -858.2 | -0.057 | -1.19 | **DISCARD** |
+| step 0.03 (max 0.20 fixed) | 1H | forced-1:3 | 6387 | 36.5 | -335.1 | -0.052 | -1.07 | **DISCARD** |
+| step 0.03 (max 0.20 fixed) | 4H | native | 3656 | 34.6 | -212.4 | -0.058 | -0.79 | **DISCARD** |
+| step 0.03 (max 0.20 fixed) | 4H | forced-1:3 | 1534 | 35.1 | -90.6 | -0.059 | -0.63 | **DISCARD** |
+| step 0.03 (max 0.20 fixed) | 1D | native | 522 | 38.3 | 79.3 | 0.152 | 0.77 | **KEEP** |
+| step 0.03 (max 0.20 fixed) | 1D | forced-1:3 | 221 | 41.2 | 16.1 | 0.073 | 0.31 | **INCONCLUSIVE** |
+| max AF 0.10 (step 0.02 fixed) | 1H | native | 10606 | 35.3 | 315.3 | 0.030 | 0.41 | **INCONCLUSIVE** |
+| max AF 0.10 (step 0.02 fixed) | 1H | forced-1:3 | 5180 | 39.8 | -72.8 | -0.014 | -0.28 | **DISCARD** |
+| max AF 0.10 (step 0.02 fixed) | 4H | native | 2554 | 38.2 | 193.6 | 0.076 | 0.80 | **INCONCLUSIVE** |
+| max AF 0.10 (step 0.02 fixed) | 4H | forced-1:3 | 1256 | 38.0 | -15.4 | -0.012 | -0.12 | **DISCARD** |
+| max AF 0.10 (step 0.02 fixed) | 1D | native | 375 | 37.9 | 56.5 | 0.151 | 0.60 | **INCONCLUSIVE** |
+| max AF 0.10 (step 0.02 fixed) | 1D | forced-1:3 | 182 | 40.1 | 7.6 | 0.042 | 0.18 | **DISCARD** |
+| max AF 0.30 (step 0.02 fixed) | 1H | native | 11319 | 35.2 | 96.7 | 0.009 | 0.13 | **DISCARD** |
+| max AF 0.30 (step 0.02 fixed) | 1H | forced-1:3 | 5519 | 38.6 | -159.1 | -0.029 | -0.58 | **DISCARD** |
+| max AF 0.30 (step 0.02 fixed) | 4H | native | 2752 | 37.8 | 97.6 | 0.035 | 0.47 | **INCONCLUSIVE** |
+| max AF 0.30 (step 0.02 fixed) | 4H | forced-1:3 | 1334 | 38.3 | -15.1 | -0.011 | -0.12 | **DISCARD** |
+| max AF 0.30 (step 0.02 fixed) | 1D | native | 401 | 37.7 | 53.9 | 0.134 | 0.59 | **INCONCLUSIVE** |
+| max AF 0.30 (step 0.02 fixed) | 1D | forced-1:3 | 191 | 41.4 | 6.4 | 0.034 | 0.15 | **DISCARD** |
+
+### 11. Market conditions
+Each cell split by the project's regime convention (trend/volatility, labelled from already-closed bars and used for reporting only, never for decisions). The source's claimed condition is a trending market; Wilder designed the parabolic to trail a trend and noted it would lose in sideways congestion.
+
+| Timeframe | Exit | Regime | Trades | Net R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | down/highvol | 2196 | +65.84 | +0.030 |
+| 1H | native | down/lowvol | 2174 | -96.09 | -0.044 |
+| 1H | native | range/highvol | 1081 | -56.60 | -0.052 |
+| 1H | native | range/lowvol | 1581 | +88.64 | +0.056 |
+| 1H | native | up/highvol | 2089 | -128.36 | -0.061 |
+| 1H | native | up/lowvol | 2182 | +236.98 | +0.109 |
+| 1H | forced-1:3 | down/highvol | 1157 | -43.51 | -0.038 |
+| 1H | forced-1:3 | down/lowvol | 973 | -31.18 | -0.032 |
+| 1H | forced-1:3 | range/highvol | 538 | -29.82 | -0.055 |
+| 1H | forced-1:3 | range/lowvol | 754 | +1.90 | +0.003 |
+| 1H | forced-1:3 | up/highvol | 1080 | -50.95 | -0.047 |
+| 1H | forced-1:3 | up/lowvol | 1013 | -9.75 | -0.010 |
+| 4H | native | down/highvol | 516 | -5.04 | -0.010 |
+| 4H | native | down/lowvol | 587 | +38.43 | +0.065 |
+| 4H | native | range/highvol | 231 | -9.05 | -0.039 |
+| 4H | native | range/lowvol | 391 | +16.98 | +0.043 |
+| 4H | native | up/highvol | 514 | +12.38 | +0.024 |
+| 4H | native | up/lowvol | 513 | +47.55 | +0.093 |
+| 4H | forced-1:3 | down/highvol | 248 | +38.64 | +0.156 |
+| 4H | forced-1:3 | down/lowvol | 274 | -44.37 | -0.162 |
+| 4H | forced-1:3 | range/highvol | 110 | -8.72 | -0.079 |
+| 4H | forced-1:3 | range/lowvol | 175 | +2.31 | +0.013 |
+| 4H | forced-1:3 | up/highvol | 278 | -6.74 | -0.024 |
+| 4H | forced-1:3 | up/lowvol | 247 | +7.77 | +0.031 |
+| 1D | native | down/highvol | 64 | -7.71 | -0.120 |
+| 1D | native | down/lowvol | 98 | +41.57 | +0.424 |
+| 1D | native | range/highvol | 35 | -5.78 | -0.165 |
+| 1D | native | range/lowvol | 51 | +19.30 | +0.378 |
+| 1D | native | up/highvol | 73 | -10.98 | -0.150 |
+| 1D | native | up/lowvol | 80 | +16.34 | +0.204 |
+| 1D | forced-1:3 | down/highvol | 33 | +0.39 | +0.012 |
+| 1D | forced-1:3 | down/lowvol | 38 | +0.87 | +0.023 |
+| 1D | forced-1:3 | range/highvol | 20 | -6.89 | -0.344 |
+| 1D | forced-1:3 | range/lowvol | 25 | +3.00 | +0.120 |
+| 1D | forced-1:3 | up/highvol | 40 | -8.89 | -0.222 |
+| 1D | forced-1:3 | up/lowvol | 35 | +17.96 | +0.513 |
+
+### 12. Source comparison
+The source is the original inventor's 1978 book, which introduces the Parabolic Time/Price System with the 0.02/0.02/0.20 parameters and makes qualitative claims - that the parabolic trails a trend and reverses the position when the trend ends, and that it should be used with a directional filter (Wilder paired it with DMI/ADX). It publishes no win rate, no reward-to-risk ratio, no Sharpe, and no drawdown figures for any crypto-like instrument, and it predates crypto, fees of 0.055% per side, and perp funding entirely. So there is no claimed performance number to reproduce; the only testable source claims are directional. Section 11 checks the main one: the rule trades with the declared trending condition. Two declared departures from the source are restated here: the source is stop-and-reverse (never flat), while this test enters only on a fresh close-cross and stands flat otherwise; and the source's reversal executes through its own stop level, while the shared engine's reversal leg fills at the next open. Sourcing strength: primary and original for the rule, silent on everything this project measures.
+
+### 13. Discard-bar verdicts
+Every cell is scored against the same fixed bar, applied after fees:
+
+| Timeframe | Exit | Verdict | Criteria met or missed |
+|---|---|---|---|
+| 1H | native | **DISCARD** | post-fee Sharpe 0.15 below 0.3. |
+| 1H | forced-1:3 | **DISCARD** | post-fee expectancy -0.030R per trade is not positive; post-fee Sharpe -0.59 below 0.3; earned only -0.84x its worst drawdown. A 1:3 exit needs 26.8% wins just to cover its own fee bill; this cell measured 38.7%. |
+| 4H | native | **INCONCLUSIVE** | positive but short of the KEEP bar: expectancy +0.037R < +0.10R; Sharpe 0.49 < 0.7. |
+| 4H | forced-1:3 | **DISCARD** | post-fee expectancy -0.008R per trade is not positive; post-fee Sharpe -0.08 below 0.3; earned only -0.17x its worst drawdown. A 1:3 exit needs 25.9% wins just to cover its own fee bill; this cell measured 38.3%. |
+| 1D | native | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.59 < 0.7. |
+| 1D | forced-1:3 | **DISCARD** | post-fee Sharpe 0.15 below 0.3; earned only 0.26x its worst drawdown. A 1:3 exit needs 25.3% wins just to cover its own fee bill; this cell measured 41.4%. |
+
+```
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+### 14. Bottom line
+Across 3 timeframes x 2 exits (6 cells) the discard bar returns **4x DISCARD, 2x INCONCLUSIVE**. What would change a verdict: a longer or different sample that lifts a cell's post-fee expectancy past the KEEP bar rather than merely past zero; a validated funding and slippage model rather than an unmodelled one; and out-of-sample confirmation. Nothing here is a live-trading recommendation, and no sweep result was used to reselect the headline.
+
+### 15. Files changed
+- `strategy_log.csv`: 79 -> 85 lines (+6 rows, one per timeframe x exit; sweeps add no rows).
+- `strategy_log.md`: 5616 -> 5860 lines (+244, this report as one appended section).
+- `src/s12_parabolic_sar.py` and `src/run_s12.py`: the strategy and its runner, new on disk this run; no existing file was modified.
+- Strategies #1-#11 are byte-for-byte untouched, and the front-page `master verdict index` remains as last written for strategies #1-#8, consistent with how #9-#11 were logged.
+
