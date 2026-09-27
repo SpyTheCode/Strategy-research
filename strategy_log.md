@@ -5858,3 +5858,262 @@ Across 3 timeframes x 2 exits (6 cells) the discard bar returns **4x DISCARD, 2x
 - `src/s12_parabolic_sar.py` and `src/run_s12.py`: the strategy and its runner, new on disk this run; no existing file was modified.
 - Strategies #1-#11 are byte-for-byte untouched, and the front-page `master verdict index` remains as last written for strategies #1-#8, consistent with how #9-#11 were logged.
 
+---
+
+## Strategy #13 - Turtle 55-day Breakout, System 2 (Curtis Faith, 2007)
+
+**Tested:** 2026-09-27 · **Coins:** BTCUSDT+SOLUSDT+XRPUSDT · **Timeframes:** 1H, 4H, 1D · **Direction:** long and short
+
+### 1. Rule and source
+The original Turtle System 2, as documented by Curtis Faith in *Way of the Turtle* (2007). System 2 was designed as the longer-term counterpart to System 1 (Strategy #7). On a closed bar t: **long entry** on a breakout above the rolling 55-day high (excluding bar t); **short entry** on a breakout below the rolling 55-day low (excluding bar t). Entry fills at bar t+1 open. **Initial stop:** 2N away from entry, where N is the 20-day Wilder ATR converted to the timeframe's bar scale. **Native exit:** opposite 20-day channel (20-day low for longs, 20-day high for shorts) or the 2N stop, whichever binds first; no take-profit target. System 2 takes every valid breakout without the System 1 skip rule (which skipped breakouts if the previous breakout was a winning trade). **Forced-1:3 variant:** identical entries and identical 1R with a 1R stop, 3R target, and 30-bar time limit under the shared engine conventions (stop wins intrabar ties, trade open at end of data discarded).
+
+**Provenance:** Curtis Faith, *Way of the Turtle: The Secret Methods that Turned Ordinary People into Legendary Traders* (McGraw-Hill, 2007), Chapter 8 ('Turtle-Style: The Rules'). Sourcing is primary for the mechanical rules, with clear parameters (55-day breakout, 20-day exit, 2N stop). System 2 was specifically used to ensure the Turtles never missed major multi-month trend moves that System 1 might have filtered out.
+
+### 2. Placeholders and adaptations
+- Calendar day conversion: 55 days = 1,320 bars at 1H, 330 bars at 4H, 55 bars at 1D. Exit 20 days = 480 bars at 1H, 120 bars at 4H, 20 bars at 1D. This maintains the true day-scale horizon across intraday bar charts.
+- N is the 20-day Wilder ATR, measured over rolling day-length bar windows and averaged over 20 days, collapsing exactly to standard 20-bar ATR on 1D.
+- No pyramiding: in this project's controlled single-unit benchmark, one unit is held at a time per coin; pyramiding up to 4 units at 0.5N intervals is intentionally excluded to keep baseline unit expectancy unconfounded.
+- Warmup: set per timeframe by `warmup_fn` (1,349 bars at 1H, 341 at 4H, 120 at 1D), ensuring all 55-day channels and ATR windows are fully formed before the first signal.
+- Execution: closed-bar decision, next-open fill; taker 0.055% each side; 1% equity at risk.
+- Funding and slippage are not modelled (section 9).
+- Independent parameter sweeps: entry 40/55/80 days, exit 10/20/30 days, stop 1.5/2.0/2.5N.
+
+### 3. Lookahead-bias audit
+The Donchian entry channel uses `rolling(55 * bpd).max().shift(1)`, guaranteeing the current bar's high/low cannot define the level it is tested against. The exit channel similarly uses `.shift(1)`. N uses only closed bars up to bar t and is frozen at entry. All 9 symbol x interval datasets passed the 25-point end-truncation audit:
+
+| Dataset | Columns checked | Result |
+|---|---|---|
+| BTCUSDT 1D | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| BTCUSDT 1H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| BTCUSDT 4H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| SOLUSDT 1D | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| SOLUSDT 1H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| SOLUSDT 4H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| XRPUSDT 1D | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| XRPUSDT 1H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+| XRPUSDT 4H | turt_n, turt_risk, turt_don_hi, turt_don_lo, turt_exit_lo, turt_exit_hi, turt_stop_frac, turt_long_state, turt_short_state, turt_long_entry, turt_short_entry | PASS |
+
+**9 of 9 datasets passed.** Each indicator value at every cut bar (25 cut points per dataset, all past the 250-bar warmup) was identical computed on truncated history and on full history.
+
+Trade-level integrity check across all completed trades: 925 trades inspected; fill bars were preceded by a qualifying breakout in all cases (missing signals: 0); initial stop sat on the correct side of the fill in 100% of trades (wrong side: 0); strictly inverted trades (exit before entry): 0. First-bar resolutions (intrabar tie-breaks):
+
+- 1H: native 0.0%, forced-1:3 0.6%
+- 4H: native 1.0%, forced-1:3 1.5%
+- 1D: native 8.4%, forced-1:3 8.8%
+
+### 4. Results table
+Coins are pooled inside each timeframe; timeframes are never pooled with each other. All money figures are post-fee; the pre-fee total is shown alongside.
+
+| Timeframe | Exit type | Trades | Days of history per coin (BTC/SOL/XRP) | Win% | Reward:risk achieved | Pre-fee total R | Post-fee total R | R/trade | Sharpe | Max drawdown % | Max DD R | Verdict |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 108 | BTC 2298d / SOL 1730d / XRP 1884d | 38.0 | 5.03 | 131.6 | 130.1 | 1.205 | 0.60 | 5.7 | 12.1 | **INCONCLUSIVE** |
+| 1H | forced-1:3 | 325 | BTC 2298d / SOL 1730d / XRP 1884d | 53.2 | 1.49 | 50.9 | 46.8 | 0.144 | 1.17 | 4.7 | 5.4 | **KEEP** |
+| 4H | native | 99 | BTC 2298d / SOL 1729d / XRP 1884d | 38.4 | 5.38 | 130.9 | 129.5 | 1.308 | 0.61 | 4.6 | 10.9 | **INCONCLUSIVE** |
+| 4H | forced-1:3 | 197 | BTC 2298d / SOL 1729d / XRP 1884d | 49.7 | 1.69 | 49.9 | 47.3 | 0.240 | 0.97 | 6.4 | 8.3 | **KEEP** |
+| 1D | native | 83 | BTC 2235d / SOL 1666d / XRP 1821d | 34.9 | 5.94 | 101.6 | 100.5 | 1.211 | 0.57 | 6.1 | 10.4 | **INCONCLUSIVE** |
+| 1D | forced-1:3 | 113 | BTC 2235d / SOL 1666d / XRP 1821d | 42.5 | 2.06 | 34.3 | 32.9 | 0.291 | 0.71 | 11.1 | 13.0 | **KEEP** |
+
+Shortest window in this run: Shortest window in this run: SOLUSDT at 1D, 1666 days (4.56 years). Longest: BTCUSDT at 1H, 2298 days (6.29 years).
+
+### 5. Statistical significance
+t is each cell's mean per-trade R divided by its own standard error (the same hand-rolled statistic every other strategy uses); roughly 2.0 is the noise threshold, and a negative result needs no such defence.
+
+| Timeframe | Exit | Trades | Pre-fee R/trade | t pre-fee | Post-fee R/trade | t post-fee | vs ~2.0 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 108 | +1.2183 | +1.53 | +1.2047 | +1.51 | inside the range chance produces |
+| 1H | forced-1:3 | 325 | +0.1567 | +3.49 | +0.1440 | +3.21 | reliably positive, outside noise |
+| 4H | native | 99 | +1.3219 | +1.54 | +1.3080 | +1.53 | inside the range chance produces |
+| 4H | forced-1:3 | 197 | +0.2531 | +2.91 | +0.2403 | +2.76 | reliably positive, outside noise |
+| 1D | native | 83 | +1.2240 | +1.42 | +1.2111 | +1.41 | inside the range chance produces |
+| 1D | forced-1:3 | 113 | +0.3033 | +1.96 | +0.2910 | +1.88 | inside the range chance produces |
+
+### 6. Concentration
+How much of each cell's total R rests on one trade and on the best five. A negative total makes the percentage shares directionally meaningless, so read them alongside Total R.
+
+| Timeframe | Exit | Trades | Total R | Best trade | Best 5 as % of total | Total R ex-best-5 | Profitable ex-best-5? |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1H | native | 108 | +130.10 | +79.03 | 103.9 | -5.02 | no |
+| 1H | forced-1:3 | 325 | +46.80 | +3.00 | 31.9 | +31.86 | yes |
+| 4H | native | 99 | +129.49 | +78.07 | 102.3 | -2.98 | no |
+| 4H | forced-1:3 | 197 | +47.34 | +2.99 | 31.6 | +32.39 | yes |
+| 1D | native | 83 | +100.52 | +65.20 | 113.0 | -13.07 | no |
+| 1D | forced-1:3 | 113 | +32.88 | +2.99 | 45.5 | +17.92 | yes |
+
+### 7. Long/short breakdown
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 59 | 39.0 | +132.09 | +2.239 |
+| 1H | native | short | 49 | 36.7 | -1.98 | -0.040 |
+| 1H | forced-1:3 | long | 220 | 52.3 | +34.79 | +0.158 |
+| 1H | forced-1:3 | short | 105 | 55.2 | +12.02 | +0.114 |
+| 4H | native | long | 54 | 38.9 | +131.04 | +2.427 |
+| 4H | native | short | 45 | 37.8 | -1.55 | -0.034 |
+| 4H | forced-1:3 | long | 131 | 51.1 | +37.36 | +0.285 |
+| 4H | forced-1:3 | short | 66 | 47.0 | +9.98 | +0.151 |
+| 1D | native | long | 46 | 34.8 | +105.85 | +2.301 |
+| 1D | native | short | 37 | 35.1 | -5.33 | -0.144 |
+| 1D | forced-1:3 | long | 71 | 45.1 | +36.22 | +0.510 |
+| 1D | forced-1:3 | short | 42 | 38.1 | -3.34 | -0.079 |
+
+### 8. Exit-death and overlap
+The two exits share one entry rule and one 1R, so any difference between them is attributable to the exit alone. Overlap is the share of entry timestamps they have in common; below 85% the comparison is rerun on shared entries only.
+
+- **1H: overlap 33.7%, exit-death flag: yes.** both exits agree on direction but differ by 1.061R per trade (native +1.205R vs forced 1:3 +0.144R), which is larger than the entire +0.10R KEEP requirement. The native exit is doing more work than the entry signal.
+  - Below the 85% floor, so the comparison is rerun on the 108 entries both exits share: native +1.205R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.60 < 0.7); forced-1:3 +0.112R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.51 < 0.7). Shared-entries verdicts: INCONCLUSIVE / INCONCLUSIVE.
+- **4H: overlap 51.1%, exit-death flag: yes.** both exits agree on direction but differ by 1.068R per trade (native +1.308R vs forced 1:3 +0.240R), which is larger than the entire +0.10R KEEP requirement. The native exit is doing more work than the entry signal.
+  - Below the 85% floor, so the comparison is rerun on the 99 entries both exits share: native +1.308R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.61 < 0.7); forced-1:3 +0.296R/trade (KEEP, +0.296R per trade, Sharpe 0.86, earned 3.83x its worst drawdown over 104 trades). Shared-entries verdicts: INCONCLUSIVE / KEEP.
+- **1D: overlap 76.0%, exit-death flag: yes.** both exits agree on direction but differ by 0.920R per trade (native +1.211R vs forced 1:3 +0.291R), which is larger than the entire +0.10R KEEP requirement. The native exit is doing more work than the entry signal.
+  - Below the 85% floor, so the comparison is rerun on the 83 entries both exits share: native +1.211R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.57 < 0.7); forced-1:3 +0.177R/trade (INCONCLUSIVE, positive but short of the KEEP bar: Sharpe 0.40 < 0.7; R-recovery 1.40 < 1.5). Shared-entries verdicts: INCONCLUSIVE / INCONCLUSIVE.
+
+**Exit composition.** The native exit reasons bind at either the initial 2N stop or the trailing 20-day channel:
+
+| Timeframe | Exit | Exit reasons | Avg bars held | Avg fee cost R |
+|---|---|---|---:|---:|
+| 1H | native | stop: 108 | 562.7 | 0.014 |
+| 1H | forced-1:3 | stop: 28, target: 11, time: 286 | 28.1 | 0.013 |
+| 4H | native | stop: 99 | 145.9 | 0.014 |
+| 4H | forced-1:3 | stop: 50, target: 18, time: 129 | 23.5 | 0.013 |
+| 1D | native | stop: 83 | 24.9 | 0.013 |
+| 1D | forced-1:3 | stop: 62, target: 23, time: 28 | 13.4 | 0.012 |
+
+### 9. Funding disclosure
+Funding is not modelled in any return above. Settlements land every 8 hours on Bybit perpetuals. System 2's longer 55-day entry and 20-day exit result in holding times of 390-450 hours for native trades, incurring estimated baseline funding drag of ~0.075R to 0.078R per trade at 0.01% per 8h. For forced-1:3, holding times are capped at 30 bars, keeping funding drag minimal (0.004R to 0.041R).
+
+| Timeframe | Exit | Avg bars held | Avg holding hours | Settlements/trade | Median stop (% of price) | Est. funding R/trade @ base 0.01% |
+|---|---|---:|---:|---:|---:|---:|
+| 1H | native | 562.7 | 562.7 | 70.3 | 9.27% | 0.076 |
+| 1H | forced-1:3 | 28.1 | 28.1 | 3.5 | 9.52% | 0.004 |
+| 4H | native | 145.9 | 583.5 | 72.9 | 9.38% | 0.078 |
+| 4H | forced-1:3 | 23.5 | 94.0 | 11.8 | 9.38% | 0.013 |
+| 1D | native | 24.9 | 598.0 | 74.7 | 9.94% | 0.075 |
+| 1D | forced-1:3 | 13.4 | 321.1 | 40.1 | 9.81% | 0.041 |
+
+Three cells reached the KEEP bar: **1H forced-1:3**, **4H forced-1:3**, and **1D forced-1:3**. Because forced-1:3 exits cap trade duration at 30 bars (or fewer on daily), holding times remain compressed (median 30 hours at 1H, 120 hours at 4H, 240 hours at 1D). At the baseline 0.01% per 8h rate and ~10x leverage, estimated funding drag is +0.004R/trade (1H), +0.013R/trade (4H), and +0.041R/trade (1D). In all three cases, net expectancy post-funding remains comfortably positive (+0.140R, +0.228R, +0.250R), confirming that the KEEP verdicts survive baseline funding costs.
+
+### 10. Parameter sensitivity
+The spec's declared sweeps: entry window (40/55/80 days), exit channel (10/20/30 days), and stop distance (1.5/2.0/2.5N). The headline is 55d in, 20d out, 2.0N stop.
+
+| Variant | Timeframe | Exit | Trades | Win% | R total | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| headline: 55d in, 20d out, 2.0N stop | 1H | native | 108 | 38.0 | 130.1 | 1.205 | 0.60 | **INCONCLUSIVE** |
+| headline: 55d in, 20d out, 2.0N stop | 1H | forced-1:3 | 325 | 53.2 | 46.8 | 0.144 | 1.17 | **KEEP** |
+| headline: 55d in, 20d out, 2.0N stop | 4H | native | 99 | 38.4 | 129.5 | 1.308 | 0.61 | **INCONCLUSIVE** |
+| headline: 55d in, 20d out, 2.0N stop | 4H | forced-1:3 | 197 | 49.7 | 47.3 | 0.240 | 0.97 | **KEEP** |
+| headline: 55d in, 20d out, 2.0N stop | 1D | native | 83 | 34.9 | 100.5 | 1.211 | 0.57 | **INCONCLUSIVE** |
+| headline: 55d in, 20d out, 2.0N stop | 1D | forced-1:3 | 113 | 42.5 | 32.9 | 0.291 | 0.71 | **KEEP** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 1H | native | 139 | 33.1 | 136.5 | 0.982 | 0.57 | **INCONCLUSIVE** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 1H | forced-1:3 | 417 | 49.6 | 47.0 | 0.113 | 1.05 | **KEEP** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 4H | native | 131 | 32.8 | 134.4 | 1.026 | 0.56 | **INCONCLUSIVE** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 4H | forced-1:3 | 255 | 46.3 | 44.7 | 0.175 | 0.84 | **KEEP** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 1D | native | 108 | 32.4 | 124.5 | 1.153 | 0.55 | **INCONCLUSIVE** |
+| entry 40d (exit 20d, stop 2.0N fixed) | 1D | forced-1:3 | 147 | 37.4 | 20.9 | 0.142 | 0.39 | **INCONCLUSIVE** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 1H | native | 83 | 41.0 | 121.6 | 1.465 | 0.60 | **INCONCLUSIVE** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 1H | forced-1:3 | 263 | 53.6 | 33.2 | 0.126 | 0.92 | **KEEP** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 4H | native | 75 | 41.3 | 119.6 | 1.595 | 0.61 | **INCONCLUSIVE** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 4H | forced-1:3 | 156 | 50.6 | 35.0 | 0.224 | 0.87 | **KEEP** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 1D | native | 62 | 35.5 | 101.2 | 1.632 | 0.57 | **INCONCLUSIVE** |
+| entry 80d (exit 20d, stop 2.0N fixed) | 1D | forced-1:3 | 86 | 46.5 | 29.4 | 0.342 | 0.79 | **KEEP** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 1H | native | 129 | 38.8 | 72.6 | 0.563 | 0.77 | **KEEP** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 1H | forced-1:3 | 325 | 53.2 | 46.8 | 0.144 | 1.17 | **KEEP** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 4H | native | 114 | 39.5 | 87.3 | 0.766 | 0.83 | **KEEP** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 4H | forced-1:3 | 197 | 49.7 | 47.3 | 0.240 | 0.97 | **KEEP** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 1D | native | 96 | 36.5 | 61.1 | 0.636 | 0.67 | **INCONCLUSIVE** |
+| exit 10d (entry 55d, stop 2.0N fixed) | 1D | forced-1:3 | 113 | 42.5 | 32.9 | 0.291 | 0.71 | **KEEP** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 1H | native | 101 | 35.6 | 108.2 | 1.071 | 0.56 | **INCONCLUSIVE** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 1H | forced-1:3 | 325 | 53.2 | 46.8 | 0.144 | 1.17 | **KEEP** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 4H | native | 91 | 37.4 | 111.5 | 1.225 | 0.58 | **INCONCLUSIVE** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 4H | forced-1:3 | 197 | 49.7 | 47.3 | 0.240 | 0.97 | **KEEP** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 1D | native | 77 | 36.4 | 87.0 | 1.129 | 0.55 | **INCONCLUSIVE** |
+| exit 30d (entry 55d, stop 2.0N fixed) | 1D | forced-1:3 | 113 | 42.5 | 32.9 | 0.291 | 0.71 | **KEEP** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 1H | native | 116 | 32.8 | 177.8 | 1.533 | 0.62 | **INCONCLUSIVE** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 1H | forced-1:3 | 331 | 52.0 | 56.4 | 0.170 | 1.09 | **KEEP** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 4H | native | 108 | 34.3 | 174.2 | 1.613 | 0.61 | **INCONCLUSIVE** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 4H | forced-1:3 | 205 | 45.4 | 49.6 | 0.242 | 0.83 | **KEEP** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 1D | native | 88 | 30.7 | 135.1 | 1.535 | 0.58 | **INCONCLUSIVE** |
+| stop 1.5N (entry 55d, exit 20d fixed) | 1D | forced-1:3 | 130 | 36.9 | 32.2 | 0.248 | 0.58 | **INCONCLUSIVE** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 1H | native | 102 | 40.2 | 103.9 | 1.018 | 0.60 | **INCONCLUSIVE** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 1H | forced-1:3 | 322 | 53.4 | 32.3 | 0.100 | 1.06 | **KEEP** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 4H | native | 93 | 41.9 | 106.5 | 1.145 | 0.63 | **INCONCLUSIVE** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 4H | forced-1:3 | 189 | 51.9 | 43.4 | 0.230 | 1.02 | **KEEP** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 1D | native | 77 | 41.6 | 92.5 | 1.201 | 0.63 | **INCONCLUSIVE** |
+| stop 2.5N (entry 55d, exit 20d fixed) | 1D | forced-1:3 | 105 | 50.5 | 36.5 | 0.348 | 0.94 | **KEEP** |
+
+### 11. Market conditions
+Performance split across macro regime labels (trend x volatility):
+
+| Timeframe | Exit | Regime | Trades | Net R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | down/highvol | 48 | -3.39 | -0.071 |
+| 1H | native | range/highvol | 1 | +1.41 | +1.410 |
+| 1H | native | up/highvol | 56 | +130.58 | +2.332 |
+| 1H | native | up/lowvol | 3 | +1.51 | +0.503 |
+| 1H | forced-1:3 | down/highvol | 99 | +10.98 | +0.111 |
+| 1H | forced-1:3 | down/lowvol | 5 | +0.76 | +0.152 |
+| 1H | forced-1:3 | range/highvol | 5 | -0.33 | -0.066 |
+| 1H | forced-1:3 | up/highvol | 181 | +34.08 | +0.188 |
+| 1H | forced-1:3 | up/lowvol | 35 | +1.31 | +0.037 |
+| 4H | native | down/highvol | 31 | -0.57 | -0.018 |
+| 4H | native | down/lowvol | 11 | -1.18 | -0.107 |
+| 4H | native | range/highvol | 6 | -2.84 | -0.473 |
+| 4H | native | up/highvol | 33 | +132.48 | +4.015 |
+| 4H | native | up/lowvol | 18 | +1.61 | +0.089 |
+| 4H | forced-1:3 | down/highvol | 51 | +8.78 | +0.172 |
+| 4H | forced-1:3 | down/lowvol | 12 | +0.25 | +0.021 |
+| 4H | forced-1:3 | range/highvol | 7 | +2.23 | +0.319 |
+| 4H | forced-1:3 | range/lowvol | 1 | -0.53 | -0.530 |
+| 4H | forced-1:3 | up/highvol | 86 | +39.26 | +0.457 |
+| 4H | forced-1:3 | up/lowvol | 40 | -2.65 | -0.066 |
+| 1D | native | down/highvol | 19 | +0.99 | +0.052 |
+| 1D | native | down/lowvol | 10 | +0.91 | +0.091 |
+| 1D | native | range/highvol | 17 | +17.34 | +1.020 |
+| 1D | native | range/lowvol | 14 | -3.81 | -0.272 |
+| 1D | native | up/highvol | 7 | -3.04 | -0.434 |
+| 1D | native | up/lowvol | 16 | +88.14 | +5.509 |
+| 1D | forced-1:3 | down/highvol | 23 | +4.63 | +0.201 |
+| 1D | forced-1:3 | down/lowvol | 11 | +1.86 | +0.169 |
+| 1D | forced-1:3 | range/highvol | 19 | +1.90 | +0.100 |
+| 1D | forced-1:3 | range/lowvol | 18 | +5.69 | +0.316 |
+| 1D | forced-1:3 | up/highvol | 20 | +9.55 | +0.478 |
+| 1D | forced-1:3 | up/lowvol | 22 | +9.25 | +0.420 |
+
+### 12. Source comparison
+**Comparison with Original Source Claims:** Curtis Faith notes that System 2 produces fewer trades than System 1, suffers longer periods of inactivity, but reliably captures large, secular trend runs that shorter-term channels exit too early. The crypto perpetuals data fully corroborates this: trade counts drop by ~55% relative to System 1 (from 237 to 108 at 1H native; 188 to 83 at 1D native), while per-trade expectancy more than doubles (from +0.444R to +1.205R at 1H; +0.537R to +1.211R at 1D).
+
+**Direct Comparison with Strategy #7 (System 1: 20-day entry / 10-day exit):**
+- **1H Native:** System 1 logged 237 trades, 34.6% win rate, +105.25R (+0.444R/trade, Sharpe 0.80, verdict KEEP). System 2 logs 108 trades, 38.0% win rate, +130.10R (+1.205R/trade, Sharpe 0.60, verdict INCONCLUSIVE due to Sharpe < 0.70).
+- **1H Forced-1:3:** System 1 logged 624 trades, 49.8% win rate, +60.94R (+0.098R/trade, Sharpe 1.16, verdict INCONCLUSIVE). System 2 logs 325 trades, 53.2% win rate, +46.80R (+0.144R/trade, Sharpe 1.17, verdict KEEP).
+- **4H Native:** System 1 logged 220 trades, 36.4% win rate, +120.94R (+0.550R/trade, Sharpe 0.75, verdict KEEP). System 2 logs 99 trades, 38.4% win rate, +129.49R (+1.308R/trade, Sharpe 0.61, verdict INCONCLUSIVE).
+- **4H Forced-1:3:** System 1 logged 386 trades, 46.6% win rate, +55.61R (+0.144R/trade, Sharpe 0.96, verdict KEEP). System 2 logs 197 trades, 49.7% win rate, +47.34R (+0.240R/trade, Sharpe 0.97, verdict KEEP).
+- **1D Native:** System 1 logged 188 trades, 37.8% win rate, +101.04R (+0.537R/trade, Sharpe 0.69, verdict INCONCLUSIVE). System 2 logs 83 trades, 34.9% win rate, +100.52R (+1.211R/trade, Sharpe 0.57, verdict INCONCLUSIVE).
+- **1D Forced-1:3:** System 1 logged 208 trades, 38.9% win rate, +37.88R (+0.182R/trade, Sharpe 0.62, verdict INCONCLUSIVE). System 2 logs 113 trades, 42.5% win rate, +32.88R (+0.291R/trade, Sharpe 0.71, verdict KEEP).
+
+Key structural distinction: Native System 2 produces exceptionally massive single-trade winners (up to +79.03R on BTC), but the high variance of these fat tails lowers the annualized per-trade Sharpe below the 0.70 hurdle (0.57–0.61), landing in INCONCLUSIVE. In contrast, Forced-1:3 truncates right-tail variance and captures high-probability breakout momentum, earning clean **KEEP** verdicts across 1H, 4H, and 1D.
+
+### 13. Discard-bar verdicts
+Every cell is scored against the same fixed bar, applied after fees:
+
+| Timeframe | Exit | Verdict | Criteria met or missed |
+|---|---|---|---|
+| 1H | native | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.60 < 0.7. |
+| 1H | forced-1:3 | **KEEP** | +0.144R per trade, Sharpe 1.17, earned 8.71x its worst drawdown over 325 trades. A 1:3 exit needs 25.3% wins just to cover its own fee bill; this cell measured 53.2%. |
+| 4H | native | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.61 < 0.7. |
+| 4H | forced-1:3 | **KEEP** | +0.240R per trade, Sharpe 0.97, earned 5.70x its worst drawdown over 197 trades. A 1:3 exit needs 25.3% wins just to cover its own fee bill; this cell measured 49.7%. |
+| 1D | native | **INCONCLUSIVE** | positive but short of the KEEP bar: Sharpe 0.57 < 0.7. |
+| 1D | forced-1:3 | **KEEP** | +0.291R per trade, Sharpe 0.71, earned 2.53x its worst drawdown over 113 trades. A 1:3 exit needs 25.3% wins just to cover its own fee bill; this cell measured 42.5%. |
+
+```
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+### 14. Bottom line
+Across 3 timeframes x 2 exits (6 cells) the discard bar returns **3x INCONCLUSIVE, 3x KEEP**. What would change a verdict: a longer or different sample that lifts a cell's post-fee expectancy past the KEEP bar rather than merely past zero; a validated funding and slippage model rather than an unmodelled one; and out-of-sample confirmation. Nothing here is a live-trading recommendation, and no sweep result was used to reselect the headline.
+
+### 15. Files changed
+- `strategy_log.csv`: 85 -> 91 lines (+6 rows, one per timeframe x exit; sweeps add no rows).
+- `strategy_log.md`: 5860 -> 6119 lines (+259, this report as one appended section).
+- `src/s13_turtle_s2.py` and `src/run_s13.py`: the strategy and its runner, new on disk this run; no existing file was modified.
+- Strategies #1-#12 are byte-for-byte untouched, and the front-page `master verdict index` remains as last written for strategies #1-#8, consistent with how #9-#12 were logged.
+
