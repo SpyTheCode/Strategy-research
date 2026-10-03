@@ -6117,3 +6117,14 @@ Across 3 timeframes x 2 exits (6 cells) the discard bar returns **3x INCONCLUSIV
 - `src/s13_turtle_s2.py` and `src/run_s13.py`: the strategy and its runner, new on disk this run; no existing file was modified.
 - Strategies #1-#12 are byte-for-byte untouched, and the front-page `master verdict index` remains as last written for strategies #1-#8, consistent with how #9-#12 were logged.
 
+## ERRATUM 2026-10-03: execution convention affecting Strategy #9 (and notes on #4, #7, #10)
+
+What was found. Strategy #9 was scored with resting-order fills: entries and stop-loss exits fill only if the price trades through the level after the signal bar closes, at the first touch, never at the bar's open. The original Strategy #9 entry did not disclose this, and the engine's own docstring described the rule as conservative. It is not: on symmetric stops, first-touch fills inside the signal bar's range give the same fill to winners and losers, while traded-at-open entries wait for the bar to move in their favour first.
+
+Effect on #9. A blind re-run written from Bulkowski's rule (v1, same engine) reproduced the published numbers, then a corrected build (v2, market-order entries) changed every pooled cell: 1H native 16,763 trades -0.290R -11.79 Sharpe; 1H forced-1:3 13,546 trades -0.242R -5.59; 4H native 4,117 -0.204R -4.69; 4H forced-1:3 3,469 -0.155R -1.94; 6H native 2,874 -0.166R -3.19; 6H forced-1:3 2,408 -0.176R -1.85; 1D native 685 -0.020R -0.20; 1D forced-1:3 586 +0.075R +0.37 (all post-fee). Before fees, 1H, 4H and 6H have no edge; only 1D forced-1:3 stays positive (+75.5R). The skip convention cost 10,483 duplicate-signal DT sessions across the pool; of the 50 exact-tie longs, the open broke higher 62% of the time, so skipping only the tied bars was not conservative either.
+
+Assumptions and limits. Same engine, data and coverage windows as the original; only the fill convention changed. Results are one long-only scan, 2022-2026, three coins, four timeframes; they do not transfer to short entries, stop-limit entries or other markets. Not corrected for multiple comparisons; the 1D forced-1:3 cell is the weakest result in the table and would not survive a family-wise adjustment.
+
+Other strategies. #4 and #7 use the same resting-order convention, so their published numbers inherit the same caveat, with opposite sign: first-touch fills help them, and their true edge is smaller than logged. #10 uses market-order entries and is unaffected.
+
+Files: reports and code for the re-runs are in rerun_outputs/ and src/s09_nr7_rerun*.py, src/run_s09_rerun*.py, specs/s09_nr7_rerun*.md.
