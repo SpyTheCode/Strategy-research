@@ -492,9 +492,8 @@ def report_tail(v2: dict, summary: dict, cov_txt: str, per_coin: str, ctx: dict)
           "  is conservative by construction and matches the spec's rule 6.",
           "- Direction on exact open-equidistant ties is long by convention; ties are",
           "  counted in section 1.",
-          "- Strategy #10 (RSI-2 re-run) shares the same engine and therefore the same",
-          "  double-touch skip convention; its v1 numbers carry the same bias. No #10 v2",
-          "  re-run was requested.",
+          "- Strategy #10 uses market-order entries and carries no double-touch skip; its",
+          "  re-run reproduced the original exactly. No #10 v2 re-run was requested.",
           "- Section 10 sensitivities were not re-run here; v1's sweep numbers keep the",
           "  skip convention and are not v2-comparable.",
           ""]
