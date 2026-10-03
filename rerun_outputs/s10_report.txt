@@ -1,0 +1,268 @@
+
+#10 RE-RUN RSI(2) trend-filtered: SMA200 filter, RSI2<10/>90, 2% stop - three coins pooled per timeframe, post-fee
+timeframe  exit         trades   win%     RR    R pre   R post  R/trade  Sharpe     DD%    DD R  recov  verdict
+---------------------------------------------------------------------------------------------------------------
+1H         native         6789   58.7   0.62    126.1   -247.3   -0.036   -1.36   243.0   266.8  -0.93  DISCARD
+1H         forced-1:3     4700   36.5   1.70    196.3    -62.2   -0.013   -0.20    88.9   127.5  -0.49  DISCARD
+4H         native         2083   47.6   1.01     27.1    -87.4   -0.042   -0.50   101.6   134.8  -0.65  DISCARD
+4H         forced-1:3     1807   28.7   2.52    115.1     15.8    0.009    0.07    56.6   109.2   0.14  DISCARD
+1D         native          424   26.4   2.57     -2.3    -25.6   -0.060   -0.24    55.5    58.7  -0.44  DISCARD
+1D         forced-1:3      423   22.5   2.79    -43.0    -66.3   -0.157   -0.74    78.3    79.5  -0.83  DISCARD
+
+# Strategy #10 RE-RUN - RSI(2) trend-filtered mean reversion
+
+## 1. Rule and source
+On each closed bar: enter LONG if close > SMA200 and RSI(2) < 10; enter SHORT if
+close < SMA200 and RSI(2) > 90; equality never qualifies; otherwise no entry. Fill
+at the next bar's open and set a fixed 2% stop from the actual fill (long entry*0.98,
+short entry*1.02); that distance is 1R. Native exit: close a long when RSI(2) > 70 and
+a short when RSI(2) < 30 on a completed bar, queued for the next open; the stop stays
+active; no take-profit; no direct reversal. Forced variant: shared engine 1R stop,
+3R target, 30-bar time limit. Fees: taker 0.055% per side on both legs. Scope:
+BTCUSDT/SOLUSDT/XRPUSDT on 1H/4H/1D, full history, coins pooled per timeframe,
+timeframes never pooled, native vs forced 1:3.
+Source family: Larry Connors, Short Term Trading Strategies That Work (2008); Larry
+Williams, Long-Term Secrets to Short-Term Trading (1999). The long-only, 5-day-SMA-
+exit Connors variant is NOT this test: the short mirror, RSI 70/30 exits, and the 2%
+stop are the contract's declared adaptations, not canonical source rules.
+
+## 2. Placeholders and adaptations (all pre-declared in the contract)
+- RSI(2): Wilder recursive smoothing, alpha=1/2, adjust=False, minimum two changes
+  before a value; avg loss 0 with gain > 0 -> 100; both 0 -> 50; gain 0 with loss > 0
+  -> 0 (RSI formula).
+- Trend filter: contemporaneous, UNSHIFTED 200-bar close SMA; strict comparisons.
+- Entry thresholds 10/90; native exit thresholds 70/30, all strict.
+- Initial stop: fixed 2.0% from the actual next-open fill - project risk convention,
+  not claimed source-authentic. No trailing or recalculation.
+- Execution: closed-bar decisions fill next open; taker 0.055%/side; 1% of starting
+  equity risk per trade, not compounded.
+- One position per coin/timeframe; no pyramiding; no simultaneous long and short.
+- Forced-1:3 30-bar limit: the project's shared unvalidated convention.
+- RSI states, not crossing events: entry is a qualifying state on a closed bar; exit
+  is a qualifying state on a later closed bar. No RSI value uses the fill bar's close.
+
+## 3. Lookahead audit - 9/9 datasets passed (all nine)
+Every coin x timeframe dataset passed through the shared truncation audit: indicators
+recomputed on truncated history must match full-history values at the cut. Traps this
+run avoids: RSI(2) and SMA200 use only bars strictly closed before the decision; the
+entry signal formed on bar t is filled at bar t+1's open; the native exit read on a
+completed bar t fills at bar t+1's open; the stop is resolved from the ACTUAL fill
+price, not the signal bar's close. The audit re-runs add_indicators on truncated data
+and compares, so a shifted SMA or a peeking RSI would fail loudly.
+
+Failures: none
+
+Data: the Sep 4, 2026 cache. The final bar of 1H (Sep 5 00:00) is permanently partial and is NOT dropped. (The 6H partial-bar note does not apply: this strategy runs on 1H/4H/1D only, per the spec's executor locks.)
+
+Final-bar effect per dataset:
+  BTCUSDT 1H: last bar 56510 (changes no trade)
+  SOLUSDT 1H: last bar 42864 (changes no trade)
+  XRPUSDT 1H: last bar 46575 (changes no trade)
+  BTCUSDT 4H: last bar 14128 (changes no trade)
+  SOLUSDT 4H: last bar 10716 (changes no trade)
+  XRPUSDT 4H: last bar 11644 (changes no trade)
+  BTCUSDT 1D: last bar 2355 (changes no trade)
+  SOLUSDT 1D: last bar 1786 (changes no trade)
+  XRPUSDT 1D: last bar 1941 (changes no trade)
+
+## 4. Results table - coins pooled per timeframe, post-fee
+```
+timeframe  exit         trades   win%     RR    R pre   R post  R/trade  Sharpe     DD%    DD R  recov  verdict
+---------------------------------------------------------------------------------------------------------------
+1H         native         6789   58.7   0.62    126.1   -247.3   -0.036   -1.36   243.0   266.8  -0.93  DISCARD
+1H         forced-1:3     4700   36.5   1.70    196.3    -62.2   -0.013   -0.20    88.9   127.5  -0.49  DISCARD
+4H         native         2083   47.6   1.01     27.1    -87.4   -0.042   -0.50   101.6   134.8  -0.65  DISCARD
+4H         forced-1:3     1807   28.7   2.52    115.1     15.8    0.009    0.07    56.6   109.2   0.14  DISCARD
+1D         native          424   26.4   2.57     -2.3    -25.6   -0.060   -0.24    55.5    58.7  -0.44  DISCARD
+1D         forced-1:3      423   22.5   2.79    -43.0    -66.3   -0.157   -0.74    78.3    79.5  -0.83  DISCARD
+```
+Trades from all three coins are pooled inside each timeframe; timeframes are never
+pooled with each other. Per-coin detail is printed after the report.
+
+## 5. Statistical significance - t-test on pooled per-trade R (post-fee)
+against the ~2.0 noise threshold:  
+  1H: n=6789, post-fee R/trade -0.0364, t=-4.00, SIG at 5%
+  4H: n=2083, post-fee R/trade -0.0420, t=-1.61, not sig at 5%
+  1D: n=424, post-fee R/trade -0.0604, t=-0.61, not sig at 5%
+  (per-coin noise is not independent, so t-statistics overstate certainty somewhat)
+
+## 6. Concentration of the native-exit result (pooled, post-fee R)
+  1H: best trade nan% of net R; best five nan% (large shares = fragile)
+  4H: best trade nan% of net R; best five nan% (large shares = fragile)
+  1D: best trade nan% of net R; best five nan% (large shares = fragile)
+
+## 7. Long/short breakdown - native exit, pooled coins, post-fee
+  1H:
+  long    3263 trades | win  59.3% | R sum    -82.4 | R/trade -0.025
+  short   3526 trades | win  58.1% | R sum   -164.9 | R/trade -0.047
+  4H:
+  long     973 trades | win  44.9% | R sum   -104.5 | R/trade -0.107
+  short   1110 trades | win  50.0% | R sum    +17.1 | R/trade +0.015
+  1D:
+  long     204 trades | win  24.5% | R sum    -10.8 | R/trade -0.053
+  short    220 trades | win  28.2% | R sum    -14.8 | R/trade -0.067
+
+## 8. Exit-death and overlap - do native and forced-1:3 trade the same entries?
+  1H: exit-death YES | overlap 66.5% (<85% -> shared-entry re-run: native n=4860, R/trade=-0.018, forced n=4505, R/trade=-0.018)
+  4H: exit-death YES | overlap 85.4%
+  1D: exit-death YES | overlap 99.1%
+  (exit-death: forced-1:3 materially worse than native, or longs never hit 3R,
+   i.e. the strategy cannot pay for its stop discipline; shared context_checks rule.)
+
+## 9. Funding - base-rate estimate (0.01% per 8h); funding stays UNMODELLED in returns
+  Mean holding time, settlements per trade, and R of base-rate funding (native):
+  1H: hold 4.0 bars | ~0.0 settlements/trade | funding 0.0025 R/trade | base-rate funding erodes the edge
+  4H: hold 2.6 bars | ~0.0 settlements/trade | funding 0.0064 R/trade | base-rate funding erodes the edge
+  1D: hold 1.1 bars | ~0.0 settlements/trade | funding 0.0162 R/trade | base-rate funding erodes the edge
+  (Base rate is a floor, not a measurement; per-trade funding varies by side and hour.)
+
+## 10. Parameter sensitivity - all declared independent sweeps
+```
+  headline: stop 2%, entries 10/90     native      1H   n= 6789 win   58.7% R/trade  -0.036 Sharpe  -1.36 DISCARD
+  headline: stop 2%, entries 10/90     forced-1:3  1H   n= 4700 win   36.5% R/trade  -0.013 Sharpe  -0.20 DISCARD
+  headline: stop 2%, entries 10/90     native      4H   n= 2083 win   47.6% R/trade  -0.042 Sharpe  -0.50 DISCARD
+  headline: stop 2%, entries 10/90     forced-1:3  4H   n= 1807 win   28.7% R/trade   0.009 Sharpe   0.07 DISCARD
+  headline: stop 2%, entries 10/90     native      1D   n=  424 win   26.4% R/trade  -0.060 Sharpe  -0.24 DISCARD
+  headline: stop 2%, entries 10/90     forced-1:3  1D   n=  423 win   22.5% R/trade  -0.157 Sharpe  -0.74 DISCARD
+  stop 1% (entries 10/90)              native      1H   n= 8227 win   47.8% R/trade  -0.086 Sharpe  -2.20 DISCARD
+  stop 1% (entries 10/90)              forced-1:3  1H   n= 6991 win   28.7% R/trade  -0.067 Sharpe  -1.06 DISCARD
+  stop 1% (entries 10/90)              native      4H   n= 2567 win   31.8% R/trade  -0.108 Sharpe  -0.97 DISCARD
+  stop 1% (entries 10/90)              forced-1:3  4H   n= 2501 win   24.8% R/trade  -0.124 Sharpe  -1.14 DISCARD
+  stop 1% (entries 10/90)              native      1D   n=  464 win   15.7% R/trade  -0.090 Sharpe  -0.27 DISCARD
+  stop 1% (entries 10/90)              forced-1:3  1D   n=  464 win   20.3% R/trade  -0.300 Sharpe  -1.51 DISCARD
+  stop 3% (entries 10/90)              native      1H   n= 6230 win   61.4% R/trade  -0.022 Sharpe  -1.05 DISCARD
+  stop 3% (entries 10/90)              forced-1:3  1H   n= 3890 win   42.3% R/trade  -0.004 Sharpe  -0.07 DISCARD
+  stop 3% (entries 10/90)              native      4H   n= 1825 win   57.5% R/trade   0.003 Sharpe   0.05 DISCARD
+  stop 3% (entries 10/90)              forced-1:3  4H   n= 1386 win   33.3% R/trade   0.050 Sharpe   0.39 INCONCLUSIVE
+  stop 3% (entries 10/90)              native      1D   n=  379 win   36.4% R/trade   0.007 Sharpe   0.03 DISCARD
+  stop 3% (entries 10/90)              forced-1:3  1D   n=  364 win   25.8% R/trade  -0.010 Sharpe  -0.04 DISCARD
+  entries 5/95 (stop 2%)               native      1H   n= 3332 win   59.9% R/trade  -0.026 Sharpe  -0.68 DISCARD
+  entries 5/95 (stop 2%)               forced-1:3  1H   n= 2818 win   37.4% R/trade   0.002 Sharpe   0.03 DISCARD
+  entries 5/95 (stop 2%)               native      4H   n= 1034 win   46.0% R/trade  -0.048 Sharpe  -0.42 DISCARD
+  entries 5/95 (stop 2%)               forced-1:3  4H   n=  967 win   27.5% R/trade  -0.038 Sharpe  -0.24 DISCARD
+  entries 5/95 (stop 2%)               native      1D   n=  202 win   27.2% R/trade  -0.037 Sharpe  -0.11 DISCARD
+  entries 5/95 (stop 2%)               forced-1:3  1D   n=  202 win   21.8% R/trade  -0.184 Sharpe  -0.62 DISCARD
+  entries 15/85 (stop 2%)              native      1H   n= 9644 win   58.9% R/trade  -0.041 Sharpe  -1.83 DISCARD
+  entries 15/85 (stop 2%)              forced-1:3  1H   n= 5882 win   36.2% R/trade  -0.008 Sharpe  -0.14 DISCARD
+  entries 15/85 (stop 2%)              native      4H   n= 2993 win   47.2% R/trade  -0.065 Sharpe  -0.95 DISCARD
+  entries 15/85 (stop 2%)              forced-1:3  4H   n= 2445 win   27.4% R/trade  -0.026 Sharpe  -0.24 DISCARD
+  entries 15/85 (stop 2%)              native      1D   n=  645 win   27.8% R/trade  -0.045 Sharpe  -0.22 DISCARD
+  entries 15/85 (stop 2%)              forced-1:3  1D   n=  636 win   23.9% R/trade  -0.099 Sharpe  -0.55 DISCARD
+```
+  Headline repeated first for reference. Every sweep is independent of the
+   headline and of one another; native RSI exit thresholds stay 70/30 in the entry
+   sweeps, as the contract requires. Nothing was selected or replaced based on
+   these results (audit flag off for the sweeps; identical indicator pipeline).
+
+## 11. Market conditions - pooled native trades by the project's regime convention
+  1H: down/highvol: n=1227, R sum +9.5 (+0.008/trade), down/lowvol: n=1214, R sum -20.4 (-0.017/trade), range/highvol: n=926, R sum -186.3 (-0.201/trade), range/lowvol: n=1075, R sum -122.6 (-0.114/trade), up/highvol: n=1192, R sum +72.1 (+0.060/trade), up/lowvol: n=1155, R sum +0.5 (+0.000/trade)
+  4H: down/highvol: n=371, R sum +56.8 (+0.153/trade), down/lowvol: n=385, R sum +11.8 (+0.031/trade), range/highvol: n=263, R sum -64.0 (-0.243/trade), range/lowvol: n=372, R sum -100.0 (-0.269/trade), up/highvol: n=394, R sum +11.1 (+0.028/trade), up/lowvol: n=298, R sum -3.2 (-0.011/trade)
+  1D: down/highvol: n=47, R sum +8.1 (+0.171/trade), down/lowvol: n=117, R sum -16.4 (-0.140/trade), range/highvol: n=43, R sum +3.5 (+0.082/trade), range/lowvol: n=78, R sum -12.8 (-0.164/trade), up/highvol: n=78, R sum -19.9 (-0.255/trade), up/lowvol: n=61, R sum +12.0 (+0.196/trade)
+  (Regime is a 100-bar average price vs its value 100 bars ago, up/down/side -
+   reporting-only; it never gates entries.)
+
+## 12. Source comparison
+The contract states plainly that NO source-specific performance claim is assumed:
+Connors' commonly cited RSI(2) pullback is long-only with a 5-day SMA exit, and the
+short mirror, RSI 70/30 exits, and the fixed 2% stop are declared adaptations. There
+is therefore no claimed number to check the measured result against. Nothing was
+borrowed from any prior #10 result: this run shares only the engine, and the blind
+constraints were kept throughout.
+
+## 13. Discard-bar verdicts - every timeframe/exit cell, with criteria
+```
+  BTCUSDT 1H native      DISCARD      post-fee expectancy -0.042R per trade is not positive; post-fee Sharpe -1.41 below 0.3; earned only -0.91x its worst drawdown
+  BTCUSDT 1H forced-1:3  DISCARD      post-fee expectancy -0.031R per trade is not positive; post-fee Sharpe -0.39 below 0.3; earned only -0.57x its worst drawdown
+  BTCUSDT 4H native      DISCARD      post-fee expectancy -0.025R per trade is not positive; post-fee Sharpe -0.25 below 0.3; earned only -0.63x its worst drawdown
+  BTCUSDT 4H forced-1:3  INCONCLUSIVE positive but short of the KEEP bar: expectancy +0.090R < +0.10R; Sharpe 0.49 < 0.7
+  BTCUSDT 1D native      DISCARD      post-fee Sharpe 0.15 below 0.3
+  BTCUSDT 1D forced-1:3  DISCARD      post-fee expectancy -0.091R per trade is not positive; post-fee Sharpe -0.29 below 0.3; earned only -0.70x its worst drawdown
+  SOLUSDT 1H native      DISCARD      post-fee expectancy -0.032R per trade is not positive; post-fee Sharpe -0.77 below 0.3; earned only -0.87x its worst drawdown
+  SOLUSDT 1H forced-1:3  INCONCLUSIVE positive but short of the KEEP bar: expectancy +0.041R < +0.10R; Sharpe 0.45 < 0.7
+  SOLUSDT 4H native      DISCARD      post-fee expectancy -0.061R per trade is not positive; post-fee Sharpe -0.52 below 0.3; earned only -0.56x its worst drawdown
+  SOLUSDT 4H forced-1:3  DISCARD      post-fee expectancy -0.096R per trade is not positive; post-fee Sharpe -0.63 below 0.3; earned only -0.65x its worst drawdown
+  SOLUSDT 1D native      DISCARD      post-fee expectancy -0.137R per trade is not positive; post-fee Sharpe -0.36 below 0.3; earned only -0.45x its worst drawdown
+  SOLUSDT 1D forced-1:3  DISCARD      post-fee expectancy -0.150R per trade is not positive; post-fee Sharpe -0.51 below 0.3; earned only -0.60x its worst drawdown
+  XRPUSDT 1H native      DISCARD      post-fee expectancy -0.034R per trade is not positive; post-fee Sharpe -0.93 below 0.3; earned only -0.87x its worst drawdown
+  XRPUSDT 1H forced-1:3  DISCARD      post-fee expectancy -0.051R per trade is not positive; post-fee Sharpe -0.59 below 0.3; earned only -0.80x its worst drawdown
+  XRPUSDT 4H native      DISCARD      post-fee expectancy -0.041R per trade is not positive; post-fee Sharpe -0.38 below 0.3; earned only -0.58x its worst drawdown
+  XRPUSDT 4H forced-1:3  DISCARD      post-fee Sharpe 0.26 below 0.3
+  XRPUSDT 1D native      DISCARD      post-fee expectancy -0.125R per trade is not positive; post-fee Sharpe -0.28 below 0.3; earned only -0.54x its worst drawdown
+  XRPUSDT 1D forced-1:3  DISCARD      post-fee expectancy -0.255R per trade is not positive; post-fee Sharpe -0.80 below 0.3; earned only -0.90x its worst drawdown
+```
+
+## 14. Bottom line
+  1H native     : 6789 trades, win 58.7%, -0.036 R/trade post-fee, Sharpe -1.36, verdict DISCARD
+  1H forced-1:3 : 4700 trades, win 36.5%, -0.013 R/trade post-fee, Sharpe -0.20, verdict DISCARD
+  4H native     : 2083 trades, win 47.6%, -0.042 R/trade post-fee, Sharpe -0.50, verdict DISCARD
+  4H forced-1:3 : 1807 trades, win 28.7%, +0.009 R/trade post-fee, Sharpe 0.07, verdict DISCARD
+  1D native     : 424 trades, win 26.4%, -0.060 R/trade post-fee, Sharpe -0.24, verdict DISCARD
+  1D forced-1:3 : 423 trades, win 22.5%, -0.157 R/trade post-fee, Sharpe -0.74, verdict DISCARD
+  (Declarative only - what happened, no recommendation. An INCONCLUSIVE verdict
+   would move to KEEP/DISCARD only with materially more data or a cleaner exit
+   comparison; the report states which cell lacks evidence.)
+
+## 15. Files changed by this re-run
+  New: src/s10_rsi2_rerun.py, src/run_s10_rerun.py (specs/s10_rsi2.md pre-existed,
+  read-only). No existing file was edited or overwritten; nothing was deleted; no
+  log rows were appended (dry run - headline log output requires separate
+  authorization). s10_rsi2.py and run_s10.py were never opened.
+
+Per-coin detail:
+```
+coin      timeframe  exit         trades   win%     RR    R pre   R post  R/trade  Sharpe     DD%    DD R  recov  verdict
+-------------------------------------------------------------------------------------------------------------------------
+BTCUSDT   1H         native         2479   59.7   0.55     31.6   -104.8   -0.042   -1.41   105.7   115.3  -0.91  DISCARD
+BTCUSDT   1H         forced-1:3     1576   40.4   1.39     37.3    -49.4   -0.031   -0.39    64.0    86.0  -0.57  DISCARD
+BTCUSDT   4H         native          711   54.7   0.78     21.4    -17.7   -0.025   -0.25    26.5    28.0  -0.63  DISCARD
+BTCUSDT   4H         forced-1:3      572   33.7   2.22     83.1     51.6    0.090    0.49    12.9    17.9   2.88  INCONCLUSIVE
+BTCUSDT   1D         native          168   33.9   2.08     17.2      8.0    0.047    0.15    12.9    13.6   0.58  DISCARD
+BTCUSDT   1D         forced-1:3      166   24.1   2.79     -6.0    -15.1   -0.091   -0.29    21.3    21.6  -0.70  DISCARD
+SOLUSDT   1H         native         2169   57.4   0.68     49.3    -70.0   -0.032   -0.77    79.5    80.2  -0.87  DISCARD
+SOLUSDT   1H         forced-1:3     1587   33.6   2.10    152.2     64.9    0.041    0.45    21.1    36.6   1.78  INCONCLUSIVE
+SOLUSDT   4H         native          691   40.1   1.35     -4.0    -42.0   -0.061   -0.52    58.5    75.6  -0.56  DISCARD
+SOLUSDT   4H         forced-1:3      638   24.1   2.76    -26.4    -61.4   -0.096   -0.63    75.1    94.1  -0.65  DISCARD
+SOLUSDT   1D         native          136   19.1   3.55    -11.1    -18.6   -0.137   -0.36    40.3    41.5  -0.45  DISCARD
+SOLUSDT   1D         forced-1:3      137   22.6   2.79    -13.0    -20.5   -0.150   -0.51    31.4    34.2  -0.60  DISCARD
+XRPUSDT   1H         native         2141   58.8   0.63     45.2    -72.5   -0.034   -0.93    75.7    83.0  -0.87  DISCARD
+XRPUSDT   1H         forced-1:3     1537   35.5   1.67      6.8    -77.7   -0.051   -0.59    87.3    97.7  -0.80  DISCARD
+XRPUSDT   4H         native          681   47.9   1.01      9.7    -27.7   -0.041   -0.38    43.7    47.3  -0.58  DISCARD
+XRPUSDT   4H         forced-1:3      597   28.6   2.63     58.3     25.6    0.043    0.26    30.9    42.3   0.60  DISCARD
+XRPUSDT   1D         native          120   24.2   2.65     -8.4    -15.0   -0.125   -0.28    28.2    27.9  -0.54  DISCARD
+XRPUSDT   1D         forced-1:3      120   20.0   2.79    -24.0    -30.6   -0.255   -0.80    34.5    34.2  -0.90  DISCARD
+```
+Data coverage per cell:
+```
+| Timeframe | Coin | Window traded | Days | Years | Tradeable bars | Warmup bars |
+|---|---|---|---|---|---|---|
+| 1H | BTCUSDT | 2020-04-02 to 2026-09-05 | 2346 | 6.42 | 56,310 | 201 |
+| 1H | SOLUSDT | 2021-10-23 to 2026-09-05 | 1778 | 4.87 | 42,664 | 201 |
+| 1H | XRPUSDT | 2021-05-21 to 2026-09-05 | 1932 | 5.29 | 46,375 | 201 |
+| 4H | BTCUSDT | 2020-04-27 to 2026-09-05 | 2321 | 6.36 | 13,928 | 201 |
+| 4H | SOLUSDT | 2021-11-17 to 2026-09-05 | 1752 | 4.80 | 10,516 | 201 |
+| 4H | XRPUSDT | 2021-06-15 to 2026-09-05 | 1907 | 5.22 | 11,444 | 201 |
+| 1D | BTCUSDT | 2020-10-12 to 2026-09-05 | 2154 | 5.90 | 2,155 | 201 |
+| 1D | SOLUSDT | 2022-05-04 to 2026-09-05 | 1585 | 4.34 | 1,586 | 201 |
+| 1D | XRPUSDT | 2021-11-30 to 2026-09-05 | 1740 | 4.76 | 1,741 | 201 |
+```
+
+Per-timeframe significance and entry shares (shared context_checks block):
+```
+1H:
+  native       6789 trades | pre-fee +0.0186R/trade (spread 0.75R, t = +2.04) | post-fee -0.0364R/trade (t = -4.00)
+  forced-1:3   4700 trades | pre-fee +0.0418R/trade (spread 1.43R, t = +2.00) | post-fee -0.0132R/trade (t = -0.63)
+  resolved inside their first candle: native 6%, forced-1:3 8%
+  the two variants share 66.5% of their entries  <-- TOO LOW to compare exits fairly
+4H:
+  native       2083 trades | pre-fee +0.0130R/trade (spread 1.19R, t = +0.50) | post-fee -0.0420R/trade (t = -1.61)
+  forced-1:3   1807 trades | pre-fee +0.0637R/trade (spread 1.71R, t = +1.58) | post-fee +0.0087R/trade (t = +0.22)
+  resolved inside their first candle: native 20%, forced-1:3 21%
+  the two variants share 85.4% of their entries
+1D:
+  native        424 trades | pre-fee -0.0054R/trade (spread 2.05R, t = -0.05) | post-fee -0.0604R/trade (t = -0.61)
+  forced-1:3    423 trades | pre-fee -0.1017R/trade (spread 1.67R, t = -1.25) | post-fee -0.1566R/trade (t = -1.93)
+  resolved inside their first candle: native 54%, forced-1:3 61%
+  the two variants share 99.1% of their entries
+```
+
+[RUN COMPLETE]
