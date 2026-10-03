@@ -302,13 +302,16 @@ def simulate_resting(
     The test is whether the trigger PRICE could have been known before the bar
     began. It could. Everything after that is fill mechanics.
 
-    THREE HOUSE RULES, ALL IN THE CONSERVATIVE DIRECTION
-    ---------------------------------------------------
+    THREE HOUSE RULES - RULE 1 IS NOT CONSERVATIVE (SEE THE #9 ERRATUM)
+    --------------------------------------------------------------------
       1. If one bar's range covers BOTH triggers, no trade is taken and the
          session is closed to further entries. Candle data cannot say which
-         side traded first. Skipping is not neutral - it removes the widest
-         sessions, which is where a breakout rule expects to earn - so the
-         count is returned in `stats` and must be reported.
+         side traded first, so the count is returned in `stats` and must be
+         reported. The skip is NOT conservative: on symmetric stops,
+         first-touch fills inside the signal bar's range give winners and
+         losers the same fill, while traded-at-open entries wait for the bar
+         to move in their favour first - it is selection by outcome, not a
+         guard (run_s09_rerun_v2.py books these sessions instead).
       2. A bar that opens beyond a resting stop fills at the OPEN, not at the
          trigger. Gapping through a stop order costs you the difference.
       3. A trade entered part-way through bar i is still tested against bar i's
