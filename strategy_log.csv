@@ -103,3 +103,9 @@ AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail),BTCUSDT+SOLUSDT+XRPUS
 "#14 Keltner channel mean reversion (EMA20 +/- 2.0x ATR20, fade the band, center-line exit)",BTCUSDT+SOLUSDT+XRPUSDT,4H,forced-1:3,1337,2313,1744,1899,33.7,1.55,-146.60,-185.50,-1.19,181.80,192.20,no,DISCARD,2026-10-05
 "#14 Keltner channel mean reversion (EMA20 +/- 2.0x ATR20, fade the band, center-line exit)",BTCUSDT+SOLUSDT+XRPUSDT,1D,native,212,2105,1536,1691,41.5,0.92,-40.90,-43.40,-1.08,43.90,44.20,no,DISCARD,2026-10-05
 "#14 Keltner channel mean reversion (EMA20 +/- 2.0x ATR20, fade the band, center-line exit)",BTCUSDT+SOLUSDT+XRPUSDT,1D,forced-1:3,202,2105,1536,1691,30.7,1.45,-45.60,-48.00,-1.06,47.50,47.00,no,DISCARD,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1H,native,7811,2344,1776,1930,30.9,2.43,836.9,299.8,0.55,24.3,90.9,yes,INCONCLUSIVE,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1H,forced-1:3,5884,2344,1776,1930,36.1,1.72,296.4,-93.1,-0.27,145.6,176.1,yes,DISCARD,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,4H,native,1836,2313,1744,1899,32.8,2.68,296.2,239.6,1.00,15.5,37.7,no,KEEP,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,4H,forced-1:3,1437,2313,1744,1899,38.1,1.82,145.1,102.2,0.62,20.8,32.8,no,INCONCLUSIVE,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,native,270,2105,1536,1691,31.5,3.88,82.5,79.5,0.71,7.2,11.4,yes,KEEP,2026-10-05
+"#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,forced-1:3,204,2105,1536,1691,37.3,1.85,13.7,11.5,0.22,15.0,16.3,yes,DISCARD,2026-10-05
