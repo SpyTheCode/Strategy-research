@@ -109,3 +109,9 @@ AdaptiveTrend (momentum + monthly Sharpe gate + ATR trail),BTCUSDT+SOLUSDT+XRPUS
 "#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,4H,forced-1:3,1437,2313,1744,1899,38.1,1.82,145.1,102.2,0.62,20.8,32.8,no,INCONCLUSIVE,2026-10-05
 "#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,native,270,2105,1536,1691,31.5,3.88,82.5,79.5,0.71,7.2,11.4,yes,KEEP,2026-10-05
 "#15 CCI trend (CCI(20) cross of +/-100, zero-line native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,forced-1:3,204,2105,1536,1691,37.3,1.85,13.7,11.5,0.22,15.0,16.3,yes,DISCARD,2026-10-05
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1H,native,15551,2344,1776,1930,27.0,2.63,950.0,-132.8,-0.22,176.9,335.2,,DISCARD,2026-09-04
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1H,forced-1:3,4589,2344,1776,1930,37.9,1.56,180.5,-124.0,-0.44,128.3,178.5,,DISCARD,2026-09-04
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,4H,native,3771,2313,1744,1899,30.4,2.64,284.8,170.3,0.62,25.5,51.9,,INCONCLUSIVE,2026-09-04
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,4H,forced-1:3,1141,2313,1744,1899,40.6,1.64,112.0,77.6,0.58,15.8,30.8,,INCONCLUSIVE,2026-09-04
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,native,580,2105,1536,1691,32.1,3.16,81.1,74.8,0.60,12.7,24.2,,INCONCLUSIVE,2026-09-04
+"#16 ROC momentum (ROC(20) zero-cross, opposite-cross native exit, 2x ATR stop)",BTCUSDT+SOLUSDT+XRPUSDT,1D,forced-1:3,164,2105,1536,1691,43.9,1.84,39.2,37.4,0.75,8.8,11.9,,KEEP,2026-09-04
