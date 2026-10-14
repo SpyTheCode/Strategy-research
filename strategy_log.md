@@ -7450,3 +7450,574 @@ Dry run only: no strategy logs were changed; no git add, commit, or push was run
 | trade_lists\s16\s16_XRPUSDT_1D_forced13.csv | 50 |
 
 Final report path: `C:\Users\MarketCoder\Desktop\s16_report_final.txt`.
+
+## Strategy #20 - ATR channel breakout (close breakout of prior 20-bar channel, opposite 10-bar channel native exit, 2x ATR(20) stop)
+Dry run reviewed and validated 2026-10-15 (cache of 2026-09-04)
+Reviewer note (provisional KEEPs): 4H native is KEEP (1,025 trades, +0.2118R/trade post-fee, Sharpe 0.86; 18 of 26 non-headline sweep variants also KEEP), but the edge is long-only (long +0.4362R, short -0.0220R) and concentrated: the best five trades are 64.2% of net R, +0.0762R/trade remains without them (below the +0.10R bar), and 2023 and 2024 are 69.2% of net R. 1D forced-1:3 is KEEP (200 trades, +0.2478R/trade, Sharpe 0.84 against the 0.70 bar, t = 2.20; 17 of 26 variants KEEP), but entry overlap with the 1D native exit is 64.4%, short trades are flat (+0.0120R/trade), and 2023 and 2024 are 63.6% of net R. The 1D rule is the same 20/10-bar, 2xATR(20) rule as Strategy #7; #7's 1D forced-1:3 was INCONCLUSIVE (Sharpe 0.62) on a data window about 129 days longer per coin, so the 1D KEEP is not independent of #7 and is sensitive to small implementation differences. All six cells were reproduced exactly (trades, total R, Sharpe, every entry key) by an independent rebuild.
+### 1. Rule and source
+
+**Departures from the spec: ATR smoothing is underspecified; this build uses standard Wilder smoothing, seeded with the simple average of the first 20 true ranges, then updated recursively.** Other execution conventions follow the requested engine path: closed-bar signals fill at next open; stop distance is frozen at signal and carried as `stop_frac`, scaling with fill/signal-close across entry gaps; stops win ties; gap-through stops fill at the open; unresolved open trades at data end are discarded; one position per coin/timeframe. Fees are 0.055% taker per side; funding is not modeled.
+
+Long when the closed-bar close is strictly above the prior entry-period high; short when strictly below the prior entry-period low. Current bar is excluded from each channel by shifting the completed rolling channel one bar. Native exit is a close strictly beyond the opposite prior exit-period channel, filled at next open. Initial stop is stop-multiple × Wilder ATR(20) from the signal bar; no native profit target. The forced comparison is 1R stop / 3R target, 30-bar limit, using the standard market-order simulation path.
+
+Spec source sentence, verbatim: **Source:** J. Welles Wilder Jr., *New Concepts in Technical Trading Systems* (1978), Volatility System / ATR-based stops. Pinned rule adaptation: enter long when close exceeds prior 20-bar high; short below prior 20-bar low. Initial stop 2×ATR(20); native exit on opposite 10-bar channel. No profit target. The spec makes no performance claim.
+
+### 2. Parameters and declared interpretations
+
+- Headline: entry 20 bars, native exit 10 bars, Wilder ATR(20), initial stop 2×ATR; 250-bar warmup.
+- Wilder ATR seed: first ATR is the arithmetic mean of the first 20 true ranges (TR[0] is high-low because prior close is unavailable); each later value is `(previous ATR × 19 + current TR) / 20`.
+- Entry and exit channels use strict close comparisons against rolling high/low values shifted one bar; current bar excluded.
+- Stop fraction at signal is `stop_multiple × ATR(signal) / close(signal)` and is passed unchanged via `Signal.stop_frac`; engine resolves the stop using next-open fill price.
+- Coins BTCUSDT/SOLUSDT/XRPUSDT; 1H/4H/1D; coins pooled by timeframe. Funding is omitted.
+- Forced 1:3: stop 1R, target 3R, maximum 30 bars; same entry function and fixed signal-time risk distance as native.
+- Sweep is the independent Cartesian grid entry 10/20/55 × exit 5/10/20 × stop 1.5/2/2.5 ATR; headline included only as reference.
+
+### 3. Fresh lookahead-bias audit
+
+Fresh cut-and-recompute lookahead audit passed 9/9 coin/timeframe datasets; 72 derived columns checked. Audit is on the headline strategy and completed before headline results.
+
+Channel inputs are shifted and ATR uses true ranges only through the signal bar. The audit checks recomputation on truncated data; execution uses next-open fills.
+
+| Dataset | Derived columns checked | Audit | Mismatches |
+|---|---:|---|---|
+| BTCUSDT 1H | 8 | PASS | none |
+| SOLUSDT 1H | 8 | PASS | none |
+| XRPUSDT 1H | 8 | PASS | none |
+| BTCUSDT 4H | 8 | PASS | none |
+| SOLUSDT 4H | 8 | PASS | none |
+| XRPUSDT 4H | 8 | PASS | none |
+| BTCUSDT 1D | 8 | PASS | none |
+| SOLUSDT 1D | 8 | PASS | none |
+| XRPUSDT 1D | 8 | PASS | none |
+
+All nine required local cache files were present; no data download was requested. Final-bar effects:
+
+- BTCUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- BTCUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- BTCUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- SOLUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- SOLUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- SOLUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- XRPUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- XRPUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+- XRPUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no signal or completed trade entry/exit is affected.
+
+### 4. Results and signal reconciliation
+
+| Timeframe | Exit | Trades | Win% | RR | R pre-fee | R post-fee | R/trade | Sharpe | Max DD % | Max DD R | R-recovery | Fee cost/trade | Verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 4322 | 30.0 | 2.33 | 284.59 | -2.81 | -0.0006 | -0.01 | 114.11 | 160.67 | -0.02 | 0.0665 | **DISCARD** |
+| 1H | forced-1:3 | 5099 | 36.0 | 1.81 | 387.10 | 55.75 | 0.0109 | 0.17 | 62.95 | 96.85 | 0.58 | 0.0650 | **DISCARD** |
+| 4H | native | 1025 | 32.1 | 2.92 | 248.59 | 217.11 | 0.2118 | 0.86 | 16.86 | 38.89 | 5.58 | 0.0307 | **KEEP** |
+| 4H | forced-1:3 | 1267 | 38.8 | 1.85 | 164.06 | 125.96 | 0.0994 | 0.81 | 19.52 | 49.10 | 2.57 | 0.0301 | **INCONCLUSIVE** |
+| 1D | native | 155 | 33.5 | 3.63 | 69.46 | 67.64 | 0.4364 | 0.48 | 10.01 | 12.25 | 5.52 | 0.0117 | **INCONCLUSIVE** |
+| 1D | forced-1:3 | 200 | 41.5 | 2.05 | 51.88 | 49.57 | 0.2478 | 0.84 | 11.27 | 13.36 | 3.71 | 0.0116 | **KEEP** |
+
+History is the tradeable window after 250 warmup bars. Shortest window in this run: SOLUSDT at 1D, 1536 days (4.21 years). Longest: BTCUSDT at 1H, 2344 days (6.42 years).
+
+Each generated valid signal is assigned once: taken and completed, blocked by an open position, last-bar signal with no next open, zero risk, accepted position still open and discarded at data end, or other accepted-but-unmatched.
+
+| Coin | Timeframe | Exit | Signals | Taken/completed | Blocked/open | Last bar | Zero risk | Open at end/discarded | Other | Reconciles? |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 4419 | 1685 | 2733 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1H | forced-1:3 | 4419 | 2012 | 2406 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 4H | native | 1196 | 396 | 800 | 0 | 0 | 0 | 0 | PASS |
+| BTCUSDT | 4H | forced-1:3 | 1196 | 503 | 693 | 0 | 0 | 0 | 0 | PASS |
+| BTCUSDT | 1D | native | 201 | 59 | 141 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1D | forced-1:3 | 201 | 78 | 122 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1H | native | 3756 | 1314 | 2441 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1H | forced-1:3 | 3756 | 1514 | 2241 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 4H | native | 995 | 311 | 684 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 4H | forced-1:3 | 995 | 371 | 624 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 1D | native | 154 | 49 | 104 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1D | forced-1:3 | 154 | 61 | 93 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 1H | native | 3553 | 1323 | 2229 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1H | forced-1:3 | 3553 | 1573 | 1979 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 4H | native | 851 | 318 | 533 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 4H | forced-1:3 | 851 | 393 | 458 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 1D | native | 124 | 47 | 76 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1D | forced-1:3 | 124 | 61 | 63 | 0 | 0 | 0 | 0 | PASS |
+
+Reconciliation PASSES: 30498 signals, 30498 assigned to exactly one category.
+
+### 5. Per-coin results
+
+| Coin | Timeframe | Exit | Trades | Win% | RR | R pre-fee | R post-fee | R/trade | Sharpe | Max DD % | Max DD R | R-recovery | Fee cost/trade | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 1685 | 28.2 | 2.53 | 143.95 | -4.54 | -0.0027 | -0.02 | 50.12 | 70.57 | -0.06 | 0.0881 | DISCARD |
+| BTCUSDT | 1H | forced-1:3 | 2012 | 35.0 | 1.78 | 117.30 | -54.64 | -0.0272 | -0.32 | 73.64 | 96.08 | -0.57 | 0.0855 | DISCARD |
+| BTCUSDT | 4H | native | 396 | 31.3 | 3.27 | 125.51 | 109.72 | 0.2771 | 0.74 | 9.72 | 20.83 | 5.27 | 0.0399 | KEEP |
+| BTCUSDT | 4H | forced-1:3 | 503 | 39.0 | 1.89 | 80.76 | 61.26 | 0.1218 | 0.72 | 11.78 | 16.19 | 3.78 | 0.0388 | KEEP |
+| BTCUSDT | 1D | native | 59 | 42.4 | 2.74 | 31.27 | 30.38 | 0.5149 | 0.60 | 4.12 | 5.37 | 5.66 | 0.0150 | INCONCLUSIVE |
+| BTCUSDT | 1D | forced-1:3 | 78 | 43.6 | 2.14 | 28.12 | 26.96 | 0.3456 | 0.78 | 4.94 | 6.12 | 4.41 | 0.0148 | KEEP |
+| SOLUSDT | 1H | native | 1314 | 32.0 | 2.17 | 76.13 | 15.47 | 0.0118 | 0.11 | 34.26 | 36.16 | 0.43 | 0.0462 | DISCARD |
+| SOLUSDT | 1H | forced-1:3 | 1514 | 38.0 | 1.74 | 130.27 | 61.22 | 0.0404 | 0.48 | 32.55 | 37.55 | 1.63 | 0.0456 | INCONCLUSIVE |
+| SOLUSDT | 4H | native | 311 | 37.0 | 2.32 | 62.93 | 56.10 | 0.1804 | 0.73 | 9.16 | 13.78 | 4.07 | 0.0220 | KEEP |
+| SOLUSDT | 4H | forced-1:3 | 371 | 41.2 | 1.89 | 71.93 | 63.82 | 0.1720 | 1.04 | 12.03 | 21.24 | 3.00 | 0.0219 | KEEP |
+| SOLUSDT | 1D | native | 49 | 32.7 | 3.23 | 13.28 | 12.86 | 0.2624 | 0.29 | 5.70 | 5.83 | 2.20 | 0.0087 | DISCARD |
+| SOLUSDT | 1D | forced-1:3 | 61 | 41.0 | 2.07 | 15.29 | 14.75 | 0.2418 | 0.58 | 8.86 | 9.07 | 1.63 | 0.0089 | INCONCLUSIVE |
+| XRPUSDT | 1H | native | 1323 | 30.1 | 2.28 | 64.51 | -13.74 | -0.0104 | -0.07 | 120.80 | 136.54 | -0.10 | 0.0591 | DISCARD |
+| XRPUSDT | 1H | forced-1:3 | 1573 | 35.5 | 1.91 | 139.53 | 49.18 | 0.0313 | 0.37 | 47.93 | 60.19 | 0.82 | 0.0574 | INCONCLUSIVE |
+| XRPUSDT | 4H | native | 318 | 28.3 | 3.22 | 60.15 | 51.29 | 0.1613 | 0.37 | 31.56 | 34.79 | 1.47 | 0.0278 | INCONCLUSIVE |
+| XRPUSDT | 4H | forced-1:3 | 393 | 36.4 | 1.75 | 11.38 | 0.87 | 0.0022 | 0.01 | 26.03 | 27.19 | 0.03 | 0.0267 | DISCARD |
+| XRPUSDT | 1D | native | 47 | 23.4 | 6.07 | 24.91 | 24.40 | 0.5191 | 0.27 | 13.54 | 13.67 | 1.79 | 0.0108 | DISCARD |
+| XRPUSDT | 1D | forced-1:3 | 61 | 39.3 | 1.89 | 8.47 | 7.86 | 0.1288 | 0.30 | 9.14 | 9.44 | 0.83 | 0.0101 | INCONCLUSIVE |
+
+| Timeframe | Exit | Trades | R/trade post-fee | t-stat | Rough noise read |
+|---|---|---:|---:|---:|---|
+| 1H | native | 4322 | -0.0006 | -0.02 | inside/indeterminate |
+| 1H | forced-1:3 | 5099 | 0.0109 | 0.53 | inside/indeterminate |
+| 4H | native | 1025 | 0.2118 | 2.37 | positive beyond 2 |
+| 4H | forced-1:3 | 1267 | 0.0994 | 2.36 | positive beyond 2 |
+| 1D | native | 155 | 0.4364 | 1.28 | inside/indeterminate |
+| 1D | forced-1:3 | 200 | 0.2478 | 2.20 | positive beyond 2 |
+
+t is mean post-fee R divided by its standard error; it is a rough noise comparison, not proof of a durable edge.
+
+### 6. Concentration check (both exits)
+
+| Timeframe | Exit | Trades | Best trade R | Best trade share | R without best | Best 5 R | Best 5 share | R without best 5 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1H | native | 4322 | +55.601 | n/a | -58.410 | +150.885 | n/a | -153.693 |
+| 1H | forced-1:3 | 5099 | +2.993 | 5.4 | +52.761 | +14.940 | 26.8 | +40.814 |
+| 4H | native | 1025 | +49.324 | 22.7 | +167.785 | +139.397 | 64.2 | +77.712 |
+| 4H | forced-1:3 | 1267 | +2.996 | 2.4 | +122.961 | +14.951 | 11.9 | +111.006 |
+| 1D | native | 155 | +42.372 | 62.6 | +25.263 | +93.367 | 138.0 | -25.731 |
+| 1D | forced-1:3 | 200 | +2.994 | 6.0 | +46.574 | +14.962 | 30.2 | +34.606 |
+
+Shares are shown only when total post-fee R is positive. Trades are ranked by post-fee R.
+
+### 7. Long/short breakdown (both exits)
+
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 2170 | 29.8 | 137.78 | 0.0635 |
+| 1H | native | short | 2152 | 30.1 | -140.59 | -0.0653 |
+| 1H | forced-1:3 | long | 2618 | 36.6 | 72.23 | 0.0276 |
+| 1H | forced-1:3 | short | 2481 | 35.4 | -16.47 | -0.0066 |
+| 4H | native | long | 523 | 31.2 | 228.15 | 0.4362 |
+| 4H | native | short | 502 | 33.1 | -11.04 | -0.0220 |
+| 4H | forced-1:3 | long | 682 | 37.4 | 87.58 | 0.1284 |
+| 4H | forced-1:3 | short | 585 | 40.5 | 38.37 | 0.0656 |
+| 1D | native | long | 80 | 31.2 | 77.20 | 0.9650 |
+| 1D | native | short | 75 | 36.0 | -9.57 | -0.1275 |
+| 1D | forced-1:3 | long | 119 | 40.3 | 48.60 | 0.4084 |
+| 1D | forced-1:3 | short | 81 | 43.2 | 0.97 | 0.0120 |
+
+### 8. Exit-death check
+
+| Timeframe | Native trades | Forced trades | Entry overlap | Exit-death? | Diagnosis |
+|---|---:|---:|---:|---|---|
+| 1H | 4322 | 5099 | 67.3% | yes | the exit flips the sign of the edge: native -0.001R per trade vs forced 1:3 +0.011R. Identical entries, so the entry signal is not what decided this - the native exit is. The edge, such as it is, lives in the forced 1:3 exit. |
+| | | | | | Shared-entry rerun (<85% overlap): native 3791 trades at 0.0057R/trade; forced 3791 trades at -0.0009R/trade. |
+| 4H | 1025 | 1267 | 64.8% | no | the two exits land within 0.112R per trade of each other (native +0.212R vs forced 1:3 +0.099R), so the result is driven by the entry signal rather than by the choice of exit |
+| | | | | | Shared-entry rerun (<85% overlap): native 901 trades at 0.2227R/trade; forced 901 trades at 0.0825R/trade. |
+| 1D | 155 | 200 | 62.1% | yes | both exits agree on direction but differ by 0.189R per trade (native +0.436R vs forced 1:3 +0.248R), which is larger than the entire +0.10R KEEP requirement. The native exit is doing more work than the entry signal. |
+| | | | | | Shared-entry rerun (<85% overlap): native 136 trades at 0.5271R/trade; forced 136 trades at 0.1845R/trade. |
+
+Entry overlap uses the union of coin/direction/fill-timestamp keys. When overlap is below 85%, a shared-entry replay applies both exits to the same eligible entry set.
+
+#### 8a. Re-entry clustering after stop-outs (saved headline CSVs)
+
+| Coin | Timeframe | Exit | Stop-outs | Later completed re-entry | Median gap (bars) | Within 3 bars |
+|---|---|---:|---:|---:|---:|---:|
+| BTCUSDT | 1H | native | 752 | 752 | 9.0 | 27.3% (205/752) |
+| BTCUSDT | 1H | forced-1:3 | 1149 | 1148 | 9.0 | 31.4% (361/1148) |
+| BTCUSDT | 4H | native | 166 | 165 | 12.0 | 24.2% (40/165) |
+| BTCUSDT | 4H | forced-1:3 | 275 | 274 | 10.0 | 28.5% (78/274) |
+| BTCUSDT | 1D | native | 24 | 24 | 10.0 | 29.2% (7/24) |
+| BTCUSDT | 1D | forced-1:3 | 40 | 40 | 11.0 | 30.0% (12/40) |
+| SOLUSDT | 1H | native | 500 | 500 | 9.0 | 25.4% (127/500) |
+| SOLUSDT | 1H | forced-1:3 | 831 | 831 | 8.0 | 31.3% (260/831) |
+| SOLUSDT | 4H | native | 117 | 116 | 10.0 | 23.3% (27/116) |
+| SOLUSDT | 4H | forced-1:3 | 181 | 180 | 9.0 | 30.6% (55/180) |
+| SOLUSDT | 1D | native | 15 | 15 | 11.0 | 33.3% (5/15) |
+| SOLUSDT | 1D | forced-1:3 | 32 | 31 | 3.0 | 54.8% (17/31) |
+| XRPUSDT | 1H | native | 534 | 534 | 10.5 | 25.8% (138/534) |
+| XRPUSDT | 1H | forced-1:3 | 850 | 849 | 11.0 | 27.9% (237/849) |
+| XRPUSDT | 4H | native | 137 | 136 | 12.5 | 25.7% (35/136) |
+| XRPUSDT | 4H | forced-1:3 | 228 | 227 | 13.0 | 28.6% (65/227) |
+| XRPUSDT | 1D | native | 20 | 19 | 9.0 | 31.6% (6/19) |
+| XRPUSDT | 1D | forced-1:3 | 32 | 32 | 13.5 | 34.4% (11/32) |
+
+#### 8b. Exit-reason split and mean post-fee R (saved headline CSVs)
+
+| Timeframe | Exit | Exit reason | Trades | Mean R post-fee |
+|---|---|---|---:|---:|
+| 1H | native | opposite-channel | 2536 | +0.7533 |
+| 1H | native | stop | 1786 | -1.0711 |
+| 1H | forced-1:3 | stop | 2830 | -1.0669 |
+| 1H | forced-1:3 | target | 767 | +2.9264 |
+| 1H | forced-1:3 | time | 1502 | +0.5529 |
+| 4H | native | opposite-channel | 605 | +1.0747 |
+| 4H | native | stop | 420 | -1.0311 |
+| 4H | forced-1:3 | stop | 684 | -1.0298 |
+| 4H | forced-1:3 | target | 203 | +2.9651 |
+| 4H | forced-1:3 | time | 380 | +0.6012 |
+| 1D | native | opposite-channel | 96 | +1.3265 |
+| 1D | native | stop | 59 | -1.0120 |
+| 1D | forced-1:3 | stop | 104 | -1.0113 |
+| 1D | forced-1:3 | target | 39 | +2.9862 |
+| 1D | forced-1:3 | time | 57 | +0.6716 |
+
+### 9. Fees and funding
+
+Funding is not modeled. This is a rough base-rate check, computed only for KEEP cells from the saved headline trade lists. Median stop % is the median across trades of `abs(entry price - initial stop) / entry price`; average hours held is mean bars held multiplied by the timeframe hours per bar. The estimate in R/trade is computed exactly as `(average hours held / 8) x 0.01% / median stop fraction` (using 0.0001 for 0.01% and the stop fraction as a decimal). Headline R/trade minus the estimate is shown for context.
+
+| Timeframe | Exit | Trades | Average bars held | Average hours held | Median stop % of entry | Funding estimate (R/trade) | Headline R/trade | Headline less estimate |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 4H | native | 1025 | 22.29 | 89.17 | 4.0155% | 0.027757 | +0.211814 | +0.184057 |
+| 1D | forced-1:3 | 200 | 15.49 | 371.76 | 10.3933% | 0.044712 | +0.247837 | +0.203125 |
+### 10. Parameter sensitivity sweep
+
+| Variant | Timeframe | Exit | Trades | Win% | Post-fee total R | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| Entry=10, exit=5, stop=1.5 ATR | 1H | native | 7661 | 28.7 | -312.95 | -0.0408 | -0.54 | DISCARD |
+| Entry=10, exit=5, stop=1.5 ATR | 1H | forced-1:3 | 7735 | 32.1 | -133.49 | -0.0173 | -0.30 | DISCARD |
+| Entry=10, exit=5, stop=1.5 ATR | 4H | native | 1856 | 30.6 | 183.73 | 0.0990 | 0.57 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=1.5 ATR | 4H | forced-1:3 | 1945 | 33.2 | 111.59 | 0.0574 | 0.52 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=1.5 ATR | 1D | native | 277 | 29.6 | 62.61 | 0.2260 | 0.43 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=1.5 ATR | 1D | forced-1:3 | 303 | 34.7 | 39.40 | 0.1300 | 0.53 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2 ATR | 1H | native | 7343 | 30.8 | -242.64 | -0.0330 | -0.54 | DISCARD |
+| Entry=10, exit=5, stop=2 ATR | 1H | forced-1:3 | 6346 | 36.5 | 47.25 | 0.0074 | 0.13 | DISCARD |
+| Entry=10, exit=5, stop=2 ATR | 4H | native | 1783 | 32.9 | 139.43 | 0.0782 | 0.56 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2 ATR | 4H | forced-1:3 | 1579 | 38.8 | 118.01 | 0.0747 | 0.70 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2 ATR | 1D | native | 269 | 30.9 | 39.85 | 0.1481 | 0.36 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2 ATR | 1D | forced-1:3 | 246 | 40.7 | 46.89 | 0.1906 | 0.76 | KEEP |
+| Entry=10, exit=5, stop=2.5 ATR | 1H | native | 7219 | 31.7 | -216.34 | -0.0300 | -0.59 | DISCARD |
+| Entry=10, exit=5, stop=2.5 ATR | 1H | forced-1:3 | 5631 | 38.6 | -28.48 | -0.0051 | -0.09 | DISCARD |
+| Entry=10, exit=5, stop=2.5 ATR | 4H | native | 1742 | 34.2 | 137.71 | 0.0791 | 0.66 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2.5 ATR | 4H | forced-1:3 | 1388 | 42.8 | 125.03 | 0.0901 | 0.86 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2.5 ATR | 1D | native | 265 | 31.7 | 32.35 | 0.1221 | 0.37 | INCONCLUSIVE |
+| Entry=10, exit=5, stop=2.5 ATR | 1D | forced-1:3 | 212 | 43.9 | 36.38 | 0.1716 | 0.72 | KEEP |
+| Entry=10, exit=10, stop=1.5 ATR | 1H | native | 6509 | 26.2 | -55.43 | -0.0085 | -0.09 | DISCARD |
+| Entry=10, exit=10, stop=1.5 ATR | 1H | forced-1:3 | 7735 | 32.1 | -133.49 | -0.0173 | -0.30 | DISCARD |
+| Entry=10, exit=10, stop=1.5 ATR | 4H | native | 1580 | 29.0 | 261.00 | 0.1652 | 0.73 | KEEP |
+| Entry=10, exit=10, stop=1.5 ATR | 4H | forced-1:3 | 1945 | 33.2 | 111.59 | 0.0574 | 0.52 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=1.5 ATR | 1D | native | 241 | 26.1 | 84.66 | 0.3513 | 0.39 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=1.5 ATR | 1D | forced-1:3 | 303 | 34.7 | 39.40 | 0.1300 | 0.53 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2 ATR | 1H | native | 6019 | 29.8 | -15.83 | -0.0026 | -0.03 | DISCARD |
+| Entry=10, exit=10, stop=2 ATR | 1H | forced-1:3 | 6346 | 36.5 | 47.25 | 0.0074 | 0.13 | DISCARD |
+| Entry=10, exit=10, stop=2 ATR | 4H | native | 1474 | 32.2 | 190.20 | 0.1290 | 0.69 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2 ATR | 4H | forced-1:3 | 1579 | 38.8 | 118.01 | 0.0747 | 0.70 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2 ATR | 1D | native | 224 | 29.0 | 60.63 | 0.2707 | 0.37 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2 ATR | 1D | forced-1:3 | 246 | 40.7 | 46.89 | 0.1906 | 0.76 | KEEP |
+| Entry=10, exit=10, stop=2.5 ATR | 1H | native | 5781 | 31.6 | -23.21 | -0.0040 | -0.06 | DISCARD |
+| Entry=10, exit=10, stop=2.5 ATR | 1H | forced-1:3 | 5631 | 38.6 | -28.48 | -0.0051 | -0.09 | DISCARD |
+| Entry=10, exit=10, stop=2.5 ATR | 4H | native | 1403 | 34.4 | 172.03 | 0.1226 | 0.74 | KEEP |
+| Entry=10, exit=10, stop=2.5 ATR | 4H | forced-1:3 | 1388 | 42.8 | 125.03 | 0.0901 | 0.86 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2.5 ATR | 1D | native | 214 | 31.8 | 50.72 | 0.2370 | 0.40 | INCONCLUSIVE |
+| Entry=10, exit=10, stop=2.5 ATR | 1D | forced-1:3 | 212 | 43.9 | 36.38 | 0.1716 | 0.72 | KEEP |
+| Entry=10, exit=20, stop=1.5 ATR | 1H | native | 4487 | 23.3 | 594.59 | 0.1325 | 0.78 | KEEP |
+| Entry=10, exit=20, stop=1.5 ATR | 1H | forced-1:3 | 7735 | 32.1 | -133.49 | -0.0173 | -0.30 | DISCARD |
+| Entry=10, exit=20, stop=1.5 ATR | 4H | native | 1091 | 24.3 | 423.35 | 0.3880 | 0.88 | KEEP |
+| Entry=10, exit=20, stop=1.5 ATR | 4H | forced-1:3 | 1945 | 33.2 | 111.59 | 0.0574 | 0.52 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=1.5 ATR | 1D | native | 172 | 25.0 | 119.28 | 0.6935 | 0.49 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=1.5 ATR | 1D | forced-1:3 | 303 | 34.7 | 39.40 | 0.1300 | 0.53 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2 ATR | 1H | native | 3943 | 27.0 | 421.57 | 0.1069 | 0.70 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2 ATR | 1H | forced-1:3 | 6346 | 36.5 | 47.25 | 0.0074 | 0.13 | DISCARD |
+| Entry=10, exit=20, stop=2 ATR | 4H | native | 937 | 28.5 | 340.67 | 0.3636 | 0.92 | KEEP |
+| Entry=10, exit=20, stop=2 ATR | 4H | forced-1:3 | 1579 | 38.8 | 118.01 | 0.0747 | 0.70 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2 ATR | 1D | native | 140 | 30.7 | 103.05 | 0.7361 | 0.56 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2 ATR | 1D | forced-1:3 | 246 | 40.7 | 46.89 | 0.1906 | 0.76 | KEEP |
+| Entry=10, exit=20, stop=2.5 ATR | 1H | native | 3602 | 29.5 | 243.35 | 0.0676 | 0.52 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2.5 ATR | 1H | forced-1:3 | 5631 | 38.6 | -28.48 | -0.0051 | -0.09 | DISCARD |
+| Entry=10, exit=20, stop=2.5 ATR | 4H | native | 838 | 31.5 | 288.07 | 0.3438 | 0.97 | KEEP |
+| Entry=10, exit=20, stop=2.5 ATR | 4H | forced-1:3 | 1388 | 42.8 | 125.03 | 0.0901 | 0.86 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2.5 ATR | 1D | native | 130 | 33.8 | 79.84 | 0.6142 | 0.56 | INCONCLUSIVE |
+| Entry=10, exit=20, stop=2.5 ATR | 1D | forced-1:3 | 212 | 43.9 | 36.38 | 0.1716 | 0.72 | KEEP |
+| Entry=20, exit=5, stop=1.5 ATR | 1H | native | 5252 | 28.9 | -164.23 | -0.0313 | -0.37 | DISCARD |
+| Entry=20, exit=5, stop=1.5 ATR | 1H | forced-1:3 | 5927 | 32.0 | -25.63 | -0.0043 | -0.07 | DISCARD |
+| Entry=20, exit=5, stop=1.5 ATR | 4H | native | 1264 | 30.6 | 193.21 | 0.1529 | 0.66 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=1.5 ATR | 4H | forced-1:3 | 1487 | 32.8 | 90.75 | 0.0610 | 0.48 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=1.5 ATR | 1D | native | 194 | 32.0 | 63.47 | 0.3271 | 0.51 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=1.5 ATR | 1D | forced-1:3 | 238 | 35.3 | 37.06 | 0.1557 | 0.56 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=2 ATR | 1H | native | 5043 | 31.5 | -122.25 | -0.0242 | -0.35 | DISCARD |
+| Entry=20, exit=5, stop=2 ATR | 1H | forced-1:3 | 5099 | 36.0 | 55.75 | 0.0109 | 0.17 | DISCARD |
+| Entry=20, exit=5, stop=2 ATR | 4H | native | 1207 | 33.1 | 154.15 | 0.1277 | 0.68 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=2 ATR | 4H | forced-1:3 | 1267 | 38.8 | 125.96 | 0.0994 | 0.81 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=2 ATR | 1D | native | 187 | 34.2 | 42.82 | 0.2290 | 0.46 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=2 ATR | 1D | forced-1:3 | 200 | 41.5 | 49.57 | 0.2478 | 0.84 | KEEP |
+| Entry=20, exit=5, stop=2.5 ATR | 1H | native | 4966 | 32.5 | -125.10 | -0.0252 | -0.44 | DISCARD |
+| Entry=20, exit=5, stop=2.5 ATR | 1H | forced-1:3 | 4674 | 39.0 | 72.52 | 0.0155 | 0.25 | DISCARD |
+| Entry=20, exit=5, stop=2.5 ATR | 4H | native | 1182 | 34.3 | 131.41 | 0.1112 | 0.72 | KEEP |
+| Entry=20, exit=5, stop=2.5 ATR | 4H | forced-1:3 | 1156 | 43.0 | 120.98 | 0.1047 | 0.88 | KEEP |
+| Entry=20, exit=5, stop=2.5 ATR | 1D | native | 184 | 35.3 | 33.57 | 0.1825 | 0.45 | INCONCLUSIVE |
+| Entry=20, exit=5, stop=2.5 ATR | 1D | forced-1:3 | 181 | 44.2 | 41.98 | 0.2319 | 0.82 | KEEP |
+| Entry=20, exit=10, stop=1.5 ATR | 1H | native | 4630 | 26.6 | -14.04 | -0.0030 | -0.03 | DISCARD |
+| Entry=20, exit=10, stop=1.5 ATR | 1H | forced-1:3 | 5927 | 32.0 | -25.63 | -0.0043 | -0.07 | DISCARD |
+| Entry=20, exit=10, stop=1.5 ATR | 4H | native | 1104 | 28.4 | 265.94 | 0.2409 | 0.81 | KEEP |
+| Entry=20, exit=10, stop=1.5 ATR | 4H | forced-1:3 | 1487 | 32.8 | 90.75 | 0.0610 | 0.48 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=1.5 ATR | 1D | native | 169 | 30.2 | 88.08 | 0.5212 | 0.47 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=1.5 ATR | 1D | forced-1:3 | 238 | 35.3 | 37.06 | 0.1557 | 0.56 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 1H | native | 4322 | 30.0 | -2.81 | -0.0006 | -0.01 | DISCARD |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 1H | forced-1:3 | 5099 | 36.0 | 55.75 | 0.0109 | 0.17 | DISCARD |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 4H | native | 1025 | 32.1 | 217.11 | 0.2118 | 0.86 | KEEP |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 4H | forced-1:3 | 1267 | 38.8 | 125.96 | 0.0994 | 0.81 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 1D | native | 155 | 33.5 | 67.64 | 0.4364 | 0.48 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=2 ATR (headline reference) | 1D | forced-1:3 | 200 | 41.5 | 49.57 | 0.2478 | 0.84 | KEEP |
+| Entry=20, exit=10, stop=2.5 ATR | 1H | native | 4195 | 31.5 | -47.69 | -0.0114 | -0.14 | DISCARD |
+| Entry=20, exit=10, stop=2.5 ATR | 1H | forced-1:3 | 4674 | 39.0 | 72.52 | 0.0155 | 0.25 | DISCARD |
+| Entry=20, exit=10, stop=2.5 ATR | 4H | native | 985 | 34.4 | 178.80 | 0.1815 | 0.88 | KEEP |
+| Entry=20, exit=10, stop=2.5 ATR | 4H | forced-1:3 | 1156 | 43.0 | 120.98 | 0.1047 | 0.88 | KEEP |
+| Entry=20, exit=10, stop=2.5 ATR | 1D | native | 150 | 36.0 | 55.64 | 0.3709 | 0.50 | INCONCLUSIVE |
+| Entry=20, exit=10, stop=2.5 ATR | 1D | forced-1:3 | 181 | 44.2 | 41.98 | 0.2319 | 0.82 | KEEP |
+| Entry=20, exit=20, stop=1.5 ATR | 1H | native | 3971 | 22.6 | 377.50 | 0.0951 | 0.54 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=1.5 ATR | 1H | forced-1:3 | 5927 | 32.0 | -25.63 | -0.0043 | -0.07 | DISCARD |
+| Entry=20, exit=20, stop=1.5 ATR | 4H | native | 945 | 23.8 | 415.50 | 0.4397 | 0.88 | KEEP |
+| Entry=20, exit=20, stop=1.5 ATR | 4H | forced-1:3 | 1487 | 32.8 | 90.75 | 0.0610 | 0.48 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=1.5 ATR | 1D | native | 144 | 27.8 | 127.54 | 0.8857 | 0.53 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=1.5 ATR | 1D | forced-1:3 | 238 | 35.3 | 37.06 | 0.1557 | 0.56 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2 ATR | 1H | native | 3603 | 26.5 | 283.52 | 0.0787 | 0.53 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2 ATR | 1H | forced-1:3 | 5099 | 36.0 | 55.75 | 0.0109 | 0.17 | DISCARD |
+| Entry=20, exit=20, stop=2 ATR | 4H | native | 842 | 28.6 | 337.87 | 0.4013 | 0.93 | KEEP |
+| Entry=20, exit=20, stop=2 ATR | 4H | forced-1:3 | 1267 | 38.8 | 125.96 | 0.0994 | 0.81 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2 ATR | 1D | native | 128 | 32.8 | 99.82 | 0.7798 | 0.55 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2 ATR | 1D | forced-1:3 | 200 | 41.5 | 49.57 | 0.2478 | 0.84 | KEEP |
+| Entry=20, exit=20, stop=2.5 ATR | 1H | native | 3400 | 29.4 | 203.05 | 0.0597 | 0.46 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2.5 ATR | 1H | forced-1:3 | 4674 | 39.0 | 72.52 | 0.0155 | 0.25 | DISCARD |
+| Entry=20, exit=20, stop=2.5 ATR | 4H | native | 788 | 31.9 | 282.32 | 0.3583 | 0.96 | KEEP |
+| Entry=20, exit=20, stop=2.5 ATR | 4H | forced-1:3 | 1156 | 43.0 | 120.98 | 0.1047 | 0.88 | KEEP |
+| Entry=20, exit=20, stop=2.5 ATR | 1D | native | 120 | 35.8 | 83.58 | 0.6965 | 0.59 | INCONCLUSIVE |
+| Entry=20, exit=20, stop=2.5 ATR | 1D | forced-1:3 | 181 | 44.2 | 41.98 | 0.2319 | 0.82 | KEEP |
+| Entry=55, exit=5, stop=1.5 ATR | 1H | native | 2904 | 27.4 | -71.23 | -0.0245 | -0.21 | DISCARD |
+| Entry=55, exit=5, stop=1.5 ATR | 1H | forced-1:3 | 3442 | 30.1 | -100.05 | -0.0291 | -0.35 | DISCARD |
+| Entry=55, exit=5, stop=1.5 ATR | 4H | native | 703 | 29.2 | 175.31 | 0.2494 | 0.69 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=1.5 ATR | 4H | forced-1:3 | 882 | 31.5 | 70.70 | 0.0802 | 0.49 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=1.5 ATR | 1D | native | 97 | 37.1 | 49.99 | 0.5153 | 0.68 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=1.5 ATR | 1D | forced-1:3 | 133 | 35.3 | 27.25 | 0.2049 | 0.53 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=2 ATR | 1H | native | 2777 | 30.2 | -56.97 | -0.0205 | -0.22 | DISCARD |
+| Entry=55, exit=5, stop=2 ATR | 1H | forced-1:3 | 3026 | 34.1 | 39.32 | 0.0130 | 0.15 | DISCARD |
+| Entry=55, exit=5, stop=2 ATR | 4H | native | 673 | 31.8 | 132.99 | 0.1976 | 0.69 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=2 ATR | 4H | forced-1:3 | 766 | 37.1 | 84.63 | 0.1105 | 0.69 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=2 ATR | 1D | native | 95 | 38.9 | 33.12 | 0.3487 | 0.60 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=2 ATR | 1D | forced-1:3 | 114 | 45.6 | 43.14 | 0.3784 | 0.95 | KEEP |
+| Entry=55, exit=5, stop=2.5 ATR | 1H | native | 2728 | 31.6 | -66.18 | -0.0243 | -0.31 | DISCARD |
+| Entry=55, exit=5, stop=2.5 ATR | 1H | forced-1:3 | 2802 | 36.9 | 12.63 | 0.0045 | 0.06 | DISCARD |
+| Entry=55, exit=5, stop=2.5 ATR | 4H | native | 656 | 33.4 | 109.14 | 0.1664 | 0.71 | KEEP |
+| Entry=55, exit=5, stop=2.5 ATR | 4H | forced-1:3 | 697 | 41.5 | 94.72 | 0.1359 | 0.88 | KEEP |
+| Entry=55, exit=5, stop=2.5 ATR | 1D | native | 92 | 40.2 | 33.62 | 0.3654 | 0.62 | INCONCLUSIVE |
+| Entry=55, exit=5, stop=2.5 ATR | 1D | forced-1:3 | 102 | 49.0 | 35.87 | 0.3517 | 0.96 | KEEP |
+| Entry=55, exit=10, stop=1.5 ATR | 1H | native | 2612 | 25.5 | 38.43 | 0.0147 | 0.09 | DISCARD |
+| Entry=55, exit=10, stop=1.5 ATR | 1H | forced-1:3 | 3442 | 30.1 | -100.05 | -0.0291 | -0.35 | DISCARD |
+| Entry=55, exit=10, stop=1.5 ATR | 4H | native | 637 | 26.2 | 206.97 | 0.3249 | 0.71 | KEEP |
+| Entry=55, exit=10, stop=1.5 ATR | 4H | forced-1:3 | 882 | 31.5 | 70.70 | 0.0802 | 0.49 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=1.5 ATR | 1D | native | 83 | 34.9 | 74.77 | 0.9008 | 0.57 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=1.5 ATR | 1D | forced-1:3 | 133 | 35.3 | 27.25 | 0.2049 | 0.53 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=2 ATR | 1H | native | 2457 | 28.7 | -4.19 | -0.0017 | -0.01 | DISCARD |
+| Entry=55, exit=10, stop=2 ATR | 1H | forced-1:3 | 3026 | 34.1 | 39.32 | 0.0130 | 0.15 | DISCARD |
+| Entry=55, exit=10, stop=2 ATR | 4H | native | 590 | 30.0 | 176.43 | 0.2990 | 0.78 | KEEP |
+| Entry=55, exit=10, stop=2 ATR | 4H | forced-1:3 | 766 | 37.1 | 84.63 | 0.1105 | 0.69 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=2 ATR | 1D | native | 80 | 38.8 | 54.14 | 0.6768 | 0.55 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=2 ATR | 1D | forced-1:3 | 114 | 45.6 | 43.14 | 0.3784 | 0.95 | KEEP |
+| Entry=55, exit=10, stop=2.5 ATR | 1H | native | 2381 | 30.5 | -36.16 | -0.0152 | -0.13 | DISCARD |
+| Entry=55, exit=10, stop=2.5 ATR | 1H | forced-1:3 | 2802 | 36.9 | 12.63 | 0.0045 | 0.06 | DISCARD |
+| Entry=55, exit=10, stop=2.5 ATR | 4H | native | 566 | 32.9 | 140.24 | 0.2478 | 0.78 | KEEP |
+| Entry=55, exit=10, stop=2.5 ATR | 4H | forced-1:3 | 697 | 41.5 | 94.72 | 0.1359 | 0.88 | KEEP |
+| Entry=55, exit=10, stop=2.5 ATR | 1D | native | 75 | 42.7 | 53.54 | 0.7139 | 0.60 | INCONCLUSIVE |
+| Entry=55, exit=10, stop=2.5 ATR | 1D | forced-1:3 | 102 | 49.0 | 35.87 | 0.3517 | 0.96 | KEEP |
+| Entry=55, exit=20, stop=1.5 ATR | 1H | native | 2321 | 21.5 | 397.38 | 0.1712 | 0.64 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=1.5 ATR | 1H | forced-1:3 | 3442 | 30.1 | -100.05 | -0.0291 | -0.35 | DISCARD |
+| Entry=55, exit=20, stop=1.5 ATR | 4H | native | 577 | 23.4 | 316.00 | 0.5477 | 0.73 | KEEP |
+| Entry=55, exit=20, stop=1.5 ATR | 4H | forced-1:3 | 882 | 31.5 | 70.70 | 0.0802 | 0.49 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=1.5 ATR | 1D | native | 77 | 29.9 | 87.63 | 1.1381 | 0.53 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=1.5 ATR | 1D | forced-1:3 | 133 | 35.3 | 27.25 | 0.2049 | 0.53 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2 ATR | 1H | native | 2137 | 25.4 | 280.37 | 0.1312 | 0.59 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2 ATR | 1H | forced-1:3 | 3026 | 34.1 | 39.32 | 0.0130 | 0.15 | DISCARD |
+| Entry=55, exit=20, stop=2 ATR | 4H | native | 520 | 28.5 | 251.42 | 0.4835 | 0.76 | KEEP |
+| Entry=55, exit=20, stop=2 ATR | 4H | forced-1:3 | 766 | 37.1 | 84.63 | 0.1105 | 0.69 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2 ATR | 1D | native | 70 | 35.7 | 67.49 | 0.9641 | 0.54 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2 ATR | 1D | forced-1:3 | 114 | 45.6 | 43.14 | 0.3784 | 0.95 | KEEP |
+| Entry=55, exit=20, stop=2.5 ATR | 1H | native | 2015 | 28.3 | 222.30 | 0.1103 | 0.56 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2.5 ATR | 1H | forced-1:3 | 2802 | 36.9 | 12.63 | 0.0045 | 0.06 | DISCARD |
+| Entry=55, exit=20, stop=2.5 ATR | 4H | native | 479 | 32.6 | 217.18 | 0.4534 | 0.82 | KEEP |
+| Entry=55, exit=20, stop=2.5 ATR | 4H | forced-1:3 | 697 | 41.5 | 94.72 | 0.1359 | 0.88 | KEEP |
+| Entry=55, exit=20, stop=2.5 ATR | 1D | native | 66 | 39.4 | 59.16 | 0.8963 | 0.59 | INCONCLUSIVE |
+| Entry=55, exit=20, stop=2.5 ATR | 1D | forced-1:3 | 102 | 49.0 | 35.87 | 0.3517 | 0.96 | KEEP |
+
+There are 26 non-headline parameter variants (3×3×3 = 27 combinations including the headline). 23/26 non-headline variants have at least one KEEP; 42/156 non-headline pooled timeframe/exit cells are KEEP.
+The headline row is included as a reference, not optimized or replaced.
+
+### 11. Market-condition breakdown
+
+| Timeframe | Exit | Volatility bucket | Trades | Post-fee R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | lowvol | 2313 | 71.95 | 0.0311 |
+| 1H | native | highvol | 2009 | -74.76 | -0.0372 |
+| 1H | native | unknown | 0 | n/a | n/a |
+| 1H | forced-1:3 | lowvol | 2440 | 60.16 | 0.0247 |
+| 1H | forced-1:3 | highvol | 2659 | -4.41 | -0.0017 |
+| 1H | forced-1:3 | unknown | 0 | n/a | n/a |
+| 4H | native | lowvol | 605 | 143.86 | 0.2378 |
+| 4H | native | highvol | 420 | 73.25 | 0.1744 |
+| 4H | native | unknown | 0 | n/a | n/a |
+| 4H | forced-1:3 | lowvol | 654 | 71.92 | 0.1100 |
+| 4H | forced-1:3 | highvol | 613 | 54.04 | 0.0882 |
+| 4H | forced-1:3 | unknown | 0 | n/a | n/a |
+| 1D | native | lowvol | 102 | 73.58 | 0.7213 |
+| 1D | native | highvol | 53 | -5.94 | -0.1121 |
+| 1D | native | unknown | 0 | n/a | n/a |
+| 1D | forced-1:3 | lowvol | 111 | 40.82 | 0.3678 |
+| 1D | forced-1:3 | highvol | 89 | 8.75 | 0.0983 |
+| 1D | forced-1:3 | unknown | 0 | n/a | n/a |
+
+Plain findings (descriptive only): 1H/native: high-vol -0.0372R/trade (n=2009) versus low-vol +0.0311R/trade (n=2313); difference high minus low -0.0683R/trade. 1H/forced-1:3: high-vol -0.0017R/trade (n=2659) versus low-vol +0.0247R/trade (n=2440); difference high minus low -0.0263R/trade. 4H/native: high-vol +0.1744R/trade (n=420) versus low-vol +0.2378R/trade (n=605); difference high minus low -0.0634R/trade. 4H/forced-1:3: high-vol +0.0882R/trade (n=613) versus low-vol +0.1100R/trade (n=654); difference high minus low -0.0218R/trade. 1D/native: high-vol -0.1121R/trade (n=53) versus low-vol +0.7213R/trade (n=102); difference high minus low -0.8334R/trade. 1D/forced-1:3: high-vol +0.0983R/trade (n=89) versus low-vol +0.3678R/trade (n=111); difference high minus low -0.2695R/trade.
+The spec makes no volatility-performance claim. The labels use the runner's pre-existing regime field and do not affect signals, entries, or exits.
+
+### 12. Source comparison and discrepancies
+
+Spec source line, verbatim: **Source:** J. Welles Wilder Jr., *New Concepts in Technical Trading Systems* (1978), Volatility System / ATR-based stops. Pinned rule adaptation: enter long when close exceeds prior 20-bar high; short below prior 20-bar low. Initial stop 2×ATR(20); native exit on opposite 10-bar channel. No profit target.
+
+The spec makes no performance claim. These results test only its pinned close-breakout/opposite-channel interpretation and ATR stop; they are not attributed to Wilder beyond the source attribution in the spec. 1H/native: -0.0006R/trade post-fee (DISCARD). 1H/forced-1:3: +0.0109R/trade post-fee (DISCARD). 4H/native: +0.2118R/trade post-fee (KEEP). 4H/forced-1:3: +0.0994R/trade post-fee (INCONCLUSIVE). 1D/native: +0.4364R/trade post-fee (INCONCLUSIVE). 1D/forced-1:3: +0.2478R/trade post-fee (KEEP).
+
+### 13. Fixed discard-bar verdict per cell
+
+The fixed bar is applied after fees:
+
+```
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+| Timeframe | Exit | Trades >=30 | Expectancy >=0.10 | Sharpe >=0.70 | Recovery >=1.5 | Reward test | Discard conditions | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1H | native | True (4322) | False (-0.0006) | False (-0.01) | False (-0.02) | RR 2.33 PASS; need 1.50 | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1H | forced-1:3 | True (5099) | False (+0.0109) | False (0.17) | False (0.58) | win 36.0% PASS; need 28.6% | exp<=0 no; Sharpe<0.30 yes; recovery<0.50 no | DISCARD |
+| 4H | native | True (1025) | True (+0.2118) | True (0.86) | True (5.58) | RR 2.92 PASS; need 1.50 | exp<=0 no; Sharpe<0.30 no; recovery<0.50 no | KEEP |
+| 4H | forced-1:3 | True (1267) | False (+0.0994) | True (0.81) | True (2.57) | win 38.8% PASS; need 27.8% | exp<=0 no; Sharpe<0.30 no; recovery<0.50 no | INCONCLUSIVE |
+| 1D | native | True (155) | True (+0.4364) | False (0.48) | True (5.52) | RR 3.63 PASS; need 1.50 | exp<=0 no; Sharpe<0.30 no; recovery<0.50 no | INCONCLUSIVE |
+| 1D | forced-1:3 | True (200) | True (+0.2478) | True (0.84) | True (3.71) | win 41.5% PASS; need 27.3% | exp<=0 no; Sharpe<0.30 no; recovery<0.50 no | KEEP |
+
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+
+### 14. Bottom line (facts only)
+
+Facts from saved headline trade lists. Top-five share is top-five post-fee R divided by total post-fee R. R/trade without the top five uses all remaining trades. Calendar year is assigned by exit timestamp; top-two-year share is the combined R from the two highest-contributing years divided by total post-fee R. Long and short R/trade are separate mean post-fee returns. Sweep counts exclude the headline row from both the KEEP count and denominator.
+
+| Cell | Best-five share of net R | R/trade without best five | Long R/trade | Short R/trade | Top two calendar years (share of net R) | Sweep KEEP count |
+|---|---:|---:|---:|---:|---|---:|
+| 4H / native | 64.21% | +0.0762 | +0.4362 | -0.0220 | 2023, 2024: 69.24% | 18 of 26 non-headline variants |
+| 1D / native | 138.04% | -0.1715 | +0.9650 | -0.1275 | 2025, 2021: 83.76% | 0 of 26 non-headline variants |
+| 1D / forced-1:3 | 30.18% | +0.1775 | +0.4084 | +0.0120 | 2024, 2023: 63.64% | 17 of 26 non-headline variants |
+
+| Timeframe | Native headline R/trade | Forced-1:3 headline R/trade | Native shared-entry R/trade | Forced-1:3 shared-entry R/trade |
+|---|---:|---:|---:|---:|
+| 4H | +0.2118 | +0.0994 | +0.2227 | +0.0825 |
+| 1D | +0.4364 | +0.2478 | +0.5271 | +0.1845 |
+### 14a. Concentration and stability detail
+
+Eligible cells are every headline KEEP or cell with post-fee expectancy >= +0.10R/trade. All detail below is computed from saved headline trade-list CSVs.
+
+#### 4H / native
+
+Best five completed trades by post-fee R:
+
+| Coin | Direction | Entry time (UTC) | Exit time (UTC) | Bars held | Entry price | Exit price | R post-fee |
+|---|---|---|---|---:|---:|---:|---:|
+| XRPUSDT | long | 2024-11-06 04:00 | 2024-11-24 12:00 | 110 | 0.53390000 | 1.38540000 | +49.3240 |
+| BTCUSDT | long | 2023-01-09 00:00 | 2023-01-30 20:00 | 131 | 17119.50000000 | 22787.50000000 | +33.0028 |
+| BTCUSDT | long | 2020-07-21 08:00 | 2020-08-07 20:00 | 105 | 9314.00000000 | 11496.50000000 | +21.6270 |
+| SOLUSDT | long | 2026-08-17 16:00 | 2026-08-31 00:00 | 80 | 76.06000000 | 101.70000000 | +17.8342 |
+| BTCUSDT | long | 2023-10-16 00:00 | 2023-10-27 20:00 | 71 | 27139.30000000 | 33717.50000000 | +17.6093 |
+
+Calendar-year breakdown by exit timestamp (UTC):
+
+| Year | Pooled trades | Pooled R | Pooled R/trade | BTC n | BTC R | BTC R/trade | SOL n | SOL R | SOL R/trade | XRP n | XRP R | XRP R/trade |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2020 | 38 | +26.2733 | +0.6914 | 38 | +26.2733 | +0.6914 | 0 | +0.0000 | n/a | 0 | +0.0000 | n/a |
+| 2021 | 104 | +3.3781 | +0.0325 | 65 | +5.7231 | +0.0880 | 7 | -2.6112 | -0.3730 | 32 | +0.2662 | +0.0083 |
+| 2022 | 186 | +1.8430 | +0.0099 | 60 | +3.7980 | +0.0633 | 63 | +7.7645 | +0.1232 | 63 | -9.7195 | -0.1543 |
+| 2023 | 172 | +86.4002 | +0.5023 | 58 | +50.8778 | +0.8772 | 60 | +29.8993 | +0.4983 | 54 | +5.6232 | +0.1041 |
+| 2024 | 180 | +63.9206 | +0.3551 | 58 | +21.7854 | +0.3756 | 64 | +6.2309 | +0.0974 | 58 | +35.9043 | +0.6190 |
+| 2025 | 208 | -3.7634 | -0.0181 | 70 | -10.1189 | -0.1446 | 73 | -2.5490 | -0.0349 | 65 | +8.9044 | +0.1370 |
+| 2026 | 137 | +39.0575 | +0.2851 | 47 | +11.3831 | +0.2422 | 44 | +17.3630 | +0.3946 | 46 | +10.3113 | +0.2242 |
+
+Results without the best five, overall and by direction:
+
+| Group | Trades | Post-fee R | R/trade |
+|---|---:|---:|---:|
+| All directions | 1020 | +77.7120 | +0.0762 |
+| long | 518 | +88.7484 | +0.1713 |
+| short | 502 | -11.0363 | -0.0220 |
+
+#### 1D / native
+
+Best five completed trades by post-fee R:
+
+| Coin | Direction | Entry time (UTC) | Exit time (UTC) | Bars held | Entry price | Exit price | R post-fee |
+|---|---|---|---|---:|---:|---:|---:|
+| XRPUSDT | long | 2024-11-11 00:00 | 2025-02-03 00:00 | 84 | 0.58870000 | 2.57860000 | +42.3725 |
+| SOLUSDT | long | 2023-10-21 00:00 | 2024-01-23 00:00 | 94 | 26.99900000 | 83.80600000 | +21.1376 |
+| BTCUSDT | long | 2020-12-17 00:00 | 2021-03-25 00:00 | 98 | 21364.00000000 | 52333.00000000 | +16.7962 |
+| BTCUSDT | long | 2024-10-29 00:00 | 2025-02-03 00:00 | 97 | 69947.60000000 | 97645.70000000 | +6.5738 |
+| BTCUSDT | long | 2023-01-09 00:00 | 2023-02-10 00:00 | 32 | 17119.50000000 | 21802.00000000 | +6.4873 |
+
+Calendar-year breakdown by exit timestamp (UTC):
+
+| Year | Pooled trades | Pooled R | Pooled R/trade | BTC n | BTC R | BTC R/trade | SOL n | SOL R | SOL R/trade | XRP n | XRP R | XRP R/trade |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2020 | 1 | -1.0111 | -1.0111 | 1 | -1.0111 | -1.0111 | 0 | +0.0000 | n/a | 0 | +0.0000 | n/a |
+| 2021 | 9 | +17.7579 | +1.9731 | 9 | +17.7579 | +1.9731 | 0 | +0.0000 | n/a | 0 | +0.0000 | n/a |
+| 2022 | 23 | -4.6438 | -0.2019 | 11 | -0.4849 | -0.0441 | 4 | -2.8657 | -0.7164 | 8 | -1.2932 | -0.1617 |
+| 2023 | 34 | -0.5971 | -0.0176 | 10 | +2.8546 | +0.2855 | 12 | +0.4165 | +0.0347 | 12 | -3.8682 | -0.3223 |
+| 2024 | 34 | +15.9388 | +0.4688 | 11 | +3.4904 | +0.3173 | 12 | +20.0475 | +1.6706 | 11 | -7.5991 | -0.6908 |
+| 2025 | 31 | +38.8962 | +1.2547 | 12 | +3.3460 | +0.2788 | 12 | -4.2491 | -0.3541 | 7 | +39.7993 | +5.6856 |
+| 2026 | 23 | +1.2950 | +0.0563 | 5 | +4.4271 | +0.8854 | 9 | -0.4923 | -0.0547 | 9 | -2.6398 | -0.2933 |
+
+Results without the best five, overall and by direction:
+
+| Group | Trades | Post-fee R | R/trade |
+|---|---:|---:|---:|
+| All directions | 150 | -25.7313 | -0.1715 |
+| long | 75 | -16.1657 | -0.2155 |
+| short | 75 | -9.5656 | -0.1275 |
+
+#### 1D / forced-1:3
+
+Best five completed trades by post-fee R:
+
+| Coin | Direction | Entry time (UTC) | Exit time (UTC) | Bars held | Entry price | Exit price | R post-fee |
+|---|---|---|---|---:|---:|---:|---:|
+| XRPUSDT | short | 2023-08-04 00:00 | 2023-08-17 00:00 | 13 | 0.66280000 | 0.38702951 | +2.9937 |
+| XRPUSDT | short | 2022-04-27 00:00 | 2022-05-11 00:00 | 14 | 0.64160000 | 0.38379869 | +2.9934 |
+| SOLUSDT | long | 2023-01-10 00:00 | 2023-01-14 00:00 | 4 | 16.25000000 | 24.52537128 | +2.9919 |
+| SOLUSDT | short | 2026-01-26 00:00 | 2026-02-05 00:00 | 10 | 118.79000000 | 80.63726911 | +2.9914 |
+| XRPUSDT | short | 2026-01-26 00:00 | 2026-02-05 00:00 | 10 | 1.83450000 | 1.25377693 | +2.9912 |
+
+Calendar-year breakdown by exit timestamp (UTC):
+
+| Year | Pooled trades | Pooled R | Pooled R/trade | BTC n | BTC R | BTC R/trade | SOL n | SOL R | SOL R/trade | XRP n | XRP R | XRP R/trade |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2020 | 2 | +1.9745 | +0.9872 | 2 | +1.9745 | +0.9872 | 0 | +0.0000 | n/a | 0 | +0.0000 | n/a |
+| 2021 | 14 | +6.1558 | +0.4397 | 14 | +6.1558 | +0.4397 | 0 | +0.0000 | n/a | 0 | +0.0000 | n/a |
+| 2022 | 27 | +4.5629 | +0.1690 | 11 | +2.7688 | +0.2517 | 4 | +0.3568 | +0.0892 | 12 | +1.4372 | +0.1198 |
+| 2023 | 48 | +15.6561 | +0.3262 | 12 | +6.7610 | +0.5634 | 22 | +11.7471 | +0.5340 | 14 | -2.8520 | -0.2037 |
+| 2024 | 46 | +15.8889 | +0.3454 | 18 | +5.5046 | +0.3058 | 12 | +5.0341 | +0.4195 | 16 | +5.3501 | +0.3344 |
+| 2025 | 32 | -4.1364 | -0.1293 | 12 | -2.7606 | -0.2300 | 11 | +0.3052 | +0.0277 | 9 | -1.6811 | -0.1868 |
+| 2026 | 31 | +9.4658 | +0.3053 | 9 | +6.5560 | +0.7284 | 12 | -2.6926 | -0.2244 | 10 | +5.6023 | +0.5602 |
+
+Results without the best five, overall and by direction:
+
+| Group | Trades | Post-fee R | R/trade |
+|---|---:|---:|---:|
+| All directions | 195 | +34.6058 | +0.1775 |
+| long | 118 | +45.6034 | +0.3865 |
+| short | 77 | -10.9976 | -0.1428 |
+
+### 15. Files created
+
+Dry run: no tracked files, engine, specs, strategy logs, or Opus files were modified; no commit or push was performed.
+
+| New source file | Lines | SHA-256 |
+|---|---:|---|
+| src/s20r_atr_channel.py | 109 | 9b6b141222abc9847ad84206e0da6ea91631239c9095b050e44098c8aed433c6 |
+| src/run_s20r.py | 863 | 21815a50ba7f422df230f41b1eb8486f90152316e0bd3aa9576bafaa5f26f66b |
+
+Trade-list CSV files: 486 (27 parameter combinations × 3 coins × 3 timeframes × 2 exits); total completed trade rows: 318557. Every CSV row count matched its run result. Headline CSV count: 18.
+
+Final report: C:\Users\MarketCoder\Desktop\s20r_report.txt.
