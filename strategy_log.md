@@ -8021,3 +8021,339 @@ Dry run: no tracked files, engine, specs, strategy logs, or Opus files were modi
 Trade-list CSV files: 486 (27 parameter combinations × 3 coins × 3 timeframes × 2 exits); total completed trade rows: 318557. Every CSV row count matched its run result. Headline CSV count: 18.
 
 Final report: C:\Users\MarketCoder\Desktop\s20r_report.txt.
+
+## Strategy #18 - Donchian failed-break reversion (close back inside prior 20-bar channel within 3 bars, native exit at channel midpoint, stop 1x channel width)
+Dry run reviewed and validated 2026-10-16 (cache of 2026-09-04)
+Reviewer note: No cell is a KEEP. Five cells are DISCARD (all three native cells and 1H and 4H forced-1:3) and 1D forced-1:3 is INCONCLUSIVE (139 trades, +0.1194R/trade, Sharpe 0.58 against the 0.70 bar), with its best five trades at +14.96R of +16.60R net (about 90%) and +1.64R remaining without them. No sweep row is a KEEP (38 DISCARD and 4 INCONCLUSIVE across 42 rows, headline included). Pre-fee R is negative in every cell except 1D forced-1:3. The native exit uses the arithmetic midpoint of the prior 20-bar channel recomputed each bar (the spec does not say fixed or recomputed); a midpoint frozen at the signal bar was not tested. An earlier run of the same spec by another executor took far fewer native trades (1H 116 versus 5,618 here) and is superseded by this build; the forced-1:3 cells of the two builds agree within 0.002R/trade.
+### 1. Rule and source
+
+Ambiguities and choices, listed before the results:
+- Failure-window count: the breakout close is bar 0; only the next 3 completed closes (bars 1 through 3) can fail. A re-entry on the third subsequent bar is valid.
+- Breakout/re-entry boundary: breakout is a strict close beyond the prior channel; back inside means the close is inclusively between that completed bar's prior-channel low and high.
+- Channel during the episode: upper/lower bounds and width are recomputed each completed bar from the preceding N bars, excluding the current bar; the breakout's original channel is not frozen.
+- Second breakout while waiting: one contiguous outside-close episode can produce at most one failure event. The window is not reset by another outside close, and an opposite-side close does not replace the stored direction. After expiry, the episode remains latched until a close returns inside, preventing repeated events from a continuing outside run.
+- Stop reference: width is measured on the failure/re-entry signal bar, multiplied by the stop-width parameter, and frozen as a fraction of that signal close. `Signal.stop_frac` applies that fraction to the next-open fill, so price distance scales across an entry gap; the stop is fill-relative, not an absolute signal-close price.
+- Midpoint: arithmetic mean of the current prior-channel high and low, recomputed each completed bar. A close reaching/passing it queues a market exit for the next open. The spec does not say limit; this uses standard close-signal `simulate`, not a resting-order path.
+- Fixed setup: BTCUSDT/SOLUSDT/XRPUSDT, 1H/4H/1D, 0.055% taker fee per side, funding omitted, closed-bar signal/next-open fill, stop wins ties, gap-through stop fills at open, open positions at data end discarded, one position per coin/timeframe, coins pooled by timeframe. Forced 1:3 uses 1R stop, 3R target and 30-bar limit.
+
+Spec source line, verbatim:
+
+**Source:** Richard Donchian, channel trading methodology as described in *Futures: An Investor's Guide to Trading Financial Futures* (1981); the failed-break reversion is this spec's explicit adaptation, not claimed as his canonical system. Enter short when close breaks above prior 20-bar high then closes back inside within 3 bars; long mirror below prior low and close back inside. Native exit at channel midpoint; no TP. Stop 1×20-bar channel width beyond fill, placeholder. The failed-break rule is the spec's adaptation, not Donchian's canonical system. The spec makes no performance claim.
+
+### 2. Parameters and state machine
+
+Headline: 20-bar channel, 3 subsequent-bar failure window, 1.0x channel-width stop, 250-bar warmup; no native profit target. A close above the upper channel arms a short failure; a close below the lower channel arms a long failure. A valid return inside within the window emits one signal for that episode. The native midpoint trigger is close-based and fills next open; stop is intrabar.
+
+Sweep varies each parameter independently around the headline (not a Cartesian grid): channel 10/20/55; failure window 1/3/5; stop width 0.5/1/1.5. The headline is a reference and excluded from the denominator: 6 unique non-headline variants.
+
+### 3. Fresh lookahead audit, coverage, and final-bar impact
+
+Fresh headline cut-and-recompute audit: 9/9 datasets passed; 45 derived columns checked.
+
+| Dataset | Derived columns checked | Audit | Mismatches | Problems |
+|---|---:|---|---:|---|
+| BTCUSDT 1H | 5 | PASS | 0 | none |
+| SOLUSDT 1H | 5 | PASS | 0 | none |
+| XRPUSDT 1H | 5 | PASS | 0 | none |
+| BTCUSDT 4H | 5 | PASS | 0 | none |
+| SOLUSDT 4H | 5 | PASS | 0 | none |
+| XRPUSDT 4H | 5 | PASS | 0 | none |
+| BTCUSDT 1D | 5 | PASS | 0 | none |
+| SOLUSDT 1D | 5 | PASS | 0 | none |
+| XRPUSDT 1D | 5 | PASS | 0 | none |
+
+Rolling extrema exclude the current bar, and the breakout/failure state machine processes completed bars strictly forward.
+
+| Coin | Timeframe | Bars | Warmup bars | History days after warmup |
+|---|---|---:|---:|---:|
+| BTCUSDT | 1H | 56511 | 250 | 2344.2 |
+| BTCUSDT | 4H | 14129 | 250 | 2313.2 |
+| BTCUSDT | 1D | 2356 | 250 | 2106.0 |
+| SOLUSDT | 1H | 42865 | 250 | 1775.6 |
+| SOLUSDT | 4H | 10717 | 250 | 1744.5 |
+| SOLUSDT | 1D | 1787 | 250 | 1537.0 |
+| XRPUSDT | 1H | 46576 | 250 | 1930.2 |
+| XRPUSDT | 4H | 11645 | 250 | 1899.2 |
+| XRPUSDT | 1D | 1942 | 250 | 1692.0 |
+
+Final-bar effects:
+- BTCUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- BTCUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- BTCUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- SOLUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- SOLUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- SOLUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- XRPUSDT 1H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- XRPUSDT 4H: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+- XRPUSDT 1D: final bar opens 2026-09-05 00:00 UTC; no final-bar signal or completed trade entry/exit is affected.
+
+### 4. Results and signal reconciliation
+
+| Timeframe | Exit | Trades | Win% | RR | R pre-fee | R post-fee | R/trade | Sharpe | Max DD % | Max DD R | R-recovery | Fee cost/trade | Verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 5618 | 62.2 | 0.46 | -131.40 | -291.68 | -0.0519 | -2.55 | 292.15 | 291.79 | -1.00 | 0.0285 | **DISCARD** |
+| 1H | forced-1:3 | 3840 | 48.4 | 0.93 | -52.13 | -160.38 | -0.0418 | -1.06 | 156.99 | 167.50 | -0.96 | 0.0282 | **DISCARD** |
+| 4H | native | 1381 | 63.2 | 0.47 | -35.51 | -53.33 | -0.0386 | -1.00 | 55.95 | 56.68 | -0.94 | 0.0129 | **DISCARD** |
+| 4H | forced-1:3 | 952 | 47.7 | 0.95 | -28.95 | -40.95 | -0.0430 | -0.60 | 41.91 | 42.11 | -0.97 | 0.0126 | **DISCARD** |
+| 1D | native | 202 | 64.9 | 0.44 | -6.99 | -7.97 | -0.0394 | -0.44 | 10.88 | 10.89 | -0.73 | 0.0048 | **DISCARD** |
+| 1D | forced-1:3 | 139 | 54.7 | 1.18 | 17.24 | 16.60 | 0.1194 | 0.58 | 8.74 | 9.68 | 1.71 | 0.0046 | **INCONCLUSIVE** |
+
+Every generated valid signal is assigned once: taken and completed, blocked by an open position, final-bar/no-next-open, zero-risk, accepted but open at end/discarded, or other.
+
+| Coin | Timeframe | Exit | Signals | Taken/completed | Blocked/open | Last bar | Zero risk | Open at end/discarded | Other | Reconciles? |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 3294 | 2155 | 1138 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1H | forced-1:3 | 3294 | 1456 | 1837 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 4H | native | 878 | 540 | 337 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 4H | forced-1:3 | 878 | 365 | 512 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1D | native | 137 | 79 | 57 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1D | forced-1:3 | 137 | 54 | 82 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1H | native | 2731 | 1703 | 1027 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1H | forced-1:3 | 2731 | 1152 | 1579 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 4H | native | 721 | 416 | 305 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 4H | forced-1:3 | 721 | 283 | 437 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1D | native | 98 | 63 | 34 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1D | forced-1:3 | 98 | 42 | 55 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1H | native | 2619 | 1760 | 858 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1H | forced-1:3 | 2619 | 1232 | 1386 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 4H | native | 638 | 425 | 212 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 4H | forced-1:3 | 638 | 304 | 333 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1D | native | 85 | 60 | 24 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1D | forced-1:3 | 85 | 43 | 41 | 0 | 0 | 1 | 0 | PASS |
+
+Reconciliation PASSES: 22402 signals, 22402 assignments. Headline files: 18 CSVs, 12132 completed rows.
+
+### 5. Per-coin results and sampling context
+
+| Coin | Timeframe | Exit | Trades | Win% | R post-fee | R/trade | Sharpe | Fixed-bar verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 2155 | 62.5 | -90.80 | -0.0421 | -1.58 | DISCARD |
+| BTCUSDT | 1H | forced-1:3 | 1456 | 47.9 | -54.90 | -0.0377 | -0.69 | DISCARD |
+| BTCUSDT | 4H | native | 540 | 61.5 | -21.54 | -0.0399 | -0.71 | DISCARD |
+| BTCUSDT | 4H | forced-1:3 | 365 | 48.5 | -13.36 | -0.0366 | -0.35 | DISCARD |
+| BTCUSDT | 1D | native | 79 | 63.3 | -1.36 | -0.0172 | -0.13 | DISCARD |
+| BTCUSDT | 1D | forced-1:3 | 54 | 48.1 | 6.45 | 0.1194 | 0.40 | INCONCLUSIVE |
+| SOLUSDT | 1H | native | 1703 | 62.0 | -75.58 | -0.0444 | -1.69 | DISCARD |
+| SOLUSDT | 1H | forced-1:3 | 1152 | 48.5 | -34.72 | -0.0301 | -0.57 | DISCARD |
+| SOLUSDT | 4H | native | 416 | 64.2 | -20.54 | -0.0494 | -0.93 | DISCARD |
+| SOLUSDT | 4H | forced-1:3 | 283 | 44.5 | -13.28 | -0.0469 | -0.46 | DISCARD |
+| SOLUSDT | 1D | native | 63 | 66.7 | -3.00 | -0.0476 | -0.38 | DISCARD |
+| SOLUSDT | 1D | forced-1:3 | 42 | 52.4 | 4.70 | 0.1120 | 0.36 | INCONCLUSIVE |
+| XRPUSDT | 1H | native | 1760 | 62.1 | -125.30 | -0.0712 | -2.68 | DISCARD |
+| XRPUSDT | 1H | forced-1:3 | 1232 | 48.9 | -70.76 | -0.0574 | -1.06 | DISCARD |
+| XRPUSDT | 4H | native | 425 | 64.5 | -11.25 | -0.0265 | -0.49 | DISCARD |
+| XRPUSDT | 4H | forced-1:3 | 304 | 49.7 | -14.31 | -0.0471 | -0.45 | DISCARD |
+| XRPUSDT | 1D | native | 60 | 65.0 | -3.60 | -0.0600 | -0.42 | DISCARD |
+| XRPUSDT | 1D | forced-1:3 | 43 | 65.1 | 5.45 | 0.1267 | 0.44 | INCONCLUSIVE |
+
+Mean post-fee R / standard error, descriptive only:
+
+| Timeframe | Exit | Trades | t-stat | Rough noise read |
+|---|---|---:|---:|---|
+| 1H | native | 5618 | -7.88 | negative beyond -2 |
+| 1H | forced-1:3 | 3840 | -3.19 | negative beyond -2 |
+| 4H | native | 1381 | -2.86 | negative beyond -2 |
+| 4H | forced-1:3 | 952 | -1.66 | inside/indeterminate |
+| 1D | native | 202 | -1.10 | inside/indeterminate |
+| 1D | forced-1:3 | 139 | 1.51 | inside/indeterminate |
+
+### 6. Concentration check
+
+| Timeframe | Exit | Trades | Best trade R | Best 5 R | R without best 5 |
+|---|---|---:|---:|---:|---:|
+| 1H | native | 5618 | 3.023 | 9.464 | -301.145 |
+| 1H | forced-1:3 | 3840 | 2.989 | 14.921 | -175.298 |
+| 4H | native | 1381 | 1.234 | 5.669 | -58.996 |
+| 4H | forced-1:3 | 952 | 2.996 | 14.931 | -55.884 |
+| 1D | native | 202 | 0.863 | 3.540 | -11.506 |
+| 1D | forced-1:3 | 139 | 2.996 | 14.959 | 1.639 |
+
+### 7. Long/short breakdown
+
+| Timeframe | Exit | Side | Trades | Win% | R post-fee | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 2747 | 63.4 | -131.65 | -0.0479 |
+| 1H | native | short | 2871 | 61.1 | -160.03 | -0.0557 |
+| 1H | forced-1:3 | long | 1849 | 49.4 | -51.55 | -0.0279 |
+| 1H | forced-1:3 | short | 1991 | 47.5 | -108.83 | -0.0547 |
+| 4H | native | long | 662 | 64.8 | -8.72 | -0.0132 |
+| 4H | native | short | 719 | 61.8 | -44.60 | -0.0620 |
+| 4H | forced-1:3 | long | 445 | 48.3 | -8.98 | -0.0202 |
+| 4H | forced-1:3 | short | 507 | 47.1 | -31.98 | -0.0631 |
+| 1D | native | long | 90 | 67.8 | 2.12 | 0.0235 |
+| 1D | native | short | 112 | 62.5 | -10.08 | -0.0900 |
+| 1D | forced-1:3 | long | 62 | 54.8 | 16.49 | 0.2659 |
+| 1D | forced-1:3 | short | 77 | 54.5 | 0.11 | 0.0015 |
+
+### 8. Exit-death and reason checks
+
+| Timeframe | Native trades | Forced trades | Entry-key overlap | Native R/trade | Forced R/trade | Exit-death? |
+|---|---:|---:|---:|---:|---:|---|
+| 1H | 5618 | 3840 | 55.8% | -0.0519 | -0.0418 | yes |
+| 4H | 1381 | 952 | 54.7% | -0.0386 | -0.0430 | yes |
+| 1D | 202 | 139 | 57.1% | -0.0394 | 0.1194 | yes |
+
+Entry-key overlap is the shared share of the union of completed (coin, direction, entry-time) keys.
+
+#### 8a. Exit-reason split and mean post-fee R
+
+| Timeframe | Exit | Exit reason | Trades | Mean post-fee R |
+|---|---|---|---:|---:|
+| 1H | native | midpoint | 4696 | 0.1406 |
+| 1H | native | stop | 922 | -1.0324 |
+| 1H | forced-1:3 | stop | 929 | -1.0362 |
+| 1H | forced-1:3 | target | 57 | 2.9383 |
+| 1H | forced-1:3 | time | 2854 | 0.2224 |
+| 4H | native | midpoint | 1143 | 0.1645 |
+| 4H | native | stop | 238 | -1.0143 |
+| 4H | forced-1:3 | stop | 229 | -1.0150 |
+| 4H | forced-1:3 | target | 13 | 2.9759 |
+| 4H | forced-1:3 | time | 710 | 0.2152 |
+| 1D | native | midpoint | 166 | 0.1700 |
+| 1D | native | stop | 36 | -1.0054 |
+| 1D | forced-1:3 | stop | 32 | -1.0055 |
+| 1D | forced-1:3 | target | 5 | 2.9918 |
+| 1D | forced-1:3 | time | 102 | 0.3315 |
+
+#### 8b. Signal/entry behavior
+
+Blocked events are reconciled per coin/timeframe in section 4. The one-position constraint is independent for every coin and timeframe; no cross-coin lock is applied.
+
+#### 8c. Native-exit holding behavior
+
+| Timeframe | Avg bars | Median bars | Max bars | Exit reason | Trades | Mean post-fee R | Blocked: position open | Signals fired while open |
+|---|---:|---:|---:|---|---:|---:|---:|---:|
+| 1H | 11.38 | 10.00 | 58 | midpoint | 4696 | 0.1406 | 3023 | 3046 |
+| 1H | 11.38 | 10.00 | 58 | stop | 922 | -1.0324 | 3023 | 3046 |
+| 1H | 11.38 | 10.00 | 58 | other | 0 | n/a | 3023 | 3046 |
+| 4H | 11.53 | 10.00 | 44 | midpoint | 1143 | 0.1645 | 854 | 862 |
+| 4H | 11.53 | 10.00 | 44 | stop | 238 | -1.0143 | 854 | 862 |
+| 4H | 11.53 | 10.00 | 44 | other | 0 | n/a | 854 | 862 |
+| 1D | 10.85 | 9.00 | 45 | midpoint | 166 | 0.1700 | 115 | 115 |
+| 1D | 10.85 | 9.00 | 45 | stop | 36 | -1.0054 | 115 | 115 |
+| 1D | 10.85 | 9.00 | 45 | other | 0 | n/a | 115 | 115 |
+
+Average/median/maximum use completed native trades' engine `bars_held`. Signals fired while open counts each valid native entry event evaluated while a position remained active, whether or not a pending next-open exit allowed a reversal.
+
+### 9. Fees and funding
+
+Fees are included at 0.055% taker on entry and exit. Funding was not modeled; no funding-adjusted outcome is claimed.
+
+### 10. Parameter sensitivity sweep
+
+| Variant | Changed factor | Timeframe | Exit | Trades | Win% | Post-fee total R | R/trade | Sharpe | Verdict |
+|---|---|---|---|---:|---:|---:|---:|---:|---|
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 1H | native | 5618 | 62.2 | -291.68 | -0.0519 | -2.55 | DISCARD |
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 1H | forced-1:3 | 3840 | 48.4 | -160.38 | -0.0418 | -1.06 | DISCARD |
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 4H | native | 1381 | 63.2 | -53.33 | -0.0386 | -1.00 | DISCARD |
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 4H | forced-1:3 | 952 | 47.7 | -40.95 | -0.0430 | -0.60 | DISCARD |
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 1D | native | 202 | 64.9 | -7.97 | -0.0394 | -0.44 | DISCARD |
+| channel=20, failure=3, stop=1x width (headline reference) | reference | 1D | forced-1:3 | 139 | 54.7 | 16.60 | 0.1194 | 0.58 | INCONCLUSIVE |
+| channel=10, failure=3, stop=1x width | channel | 1H | native | 9877 | 60.6 | -451.58 | -0.0457 | -3.09 | DISCARD |
+| channel=10, failure=3, stop=1x width | channel | 1H | forced-1:3 | 4818 | 45.4 | -237.80 | -0.0494 | -1.21 | DISCARD |
+| channel=10, failure=3, stop=1x width | channel | 4H | native | 2463 | 63.0 | -65.40 | -0.0266 | -0.92 | DISCARD |
+| channel=10, failure=3, stop=1x width | channel | 4H | forced-1:3 | 1196 | 46.2 | -25.07 | -0.0210 | -0.27 | DISCARD |
+| channel=10, failure=3, stop=1x width | channel | 1D | native | 343 | 63.0 | -8.56 | -0.0250 | -0.36 | DISCARD |
+| channel=10, failure=3, stop=1x width | channel | 1D | forced-1:3 | 176 | 44.3 | -9.76 | -0.0554 | -0.30 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 1H | native | 2404 | 64.2 | -100.49 | -0.0418 | -1.34 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 1H | forced-1:3 | 2410 | 51.4 | -40.37 | -0.0167 | -0.47 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 4H | native | 587 | 60.3 | -40.38 | -0.0688 | -1.13 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 4H | forced-1:3 | 613 | 48.9 | -30.09 | -0.0491 | -0.76 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 1D | native | 79 | 53.2 | -10.49 | -0.1328 | -0.92 | DISCARD |
+| channel=55, failure=3, stop=1x width | channel | 1D | forced-1:3 | 85 | 40.0 | -7.70 | -0.0906 | -0.55 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 1H | native | 4560 | 63.5 | -198.68 | -0.0436 | -2.00 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 1H | forced-1:3 | 3246 | 49.0 | -103.54 | -0.0319 | -0.77 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 4H | native | 1134 | 64.0 | -36.06 | -0.0318 | -0.74 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 4H | forced-1:3 | 810 | 47.5 | -17.35 | -0.0214 | -0.26 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 1D | native | 151 | 62.9 | -10.08 | -0.0668 | -0.62 | DISCARD |
+| channel=20, failure=1, stop=1x width | failure window | 1D | forced-1:3 | 115 | 49.6 | 0.74 | 0.0064 | 0.03 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 1H | native | 5668 | 62.1 | -294.06 | -0.0519 | -2.57 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 1H | forced-1:3 | 3876 | 48.5 | -155.18 | -0.0400 | -1.03 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 4H | native | 1398 | 63.4 | -49.79 | -0.0356 | -0.92 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 4H | forced-1:3 | 962 | 47.8 | -35.79 | -0.0372 | -0.51 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 1D | native | 207 | 65.2 | -7.18 | -0.0347 | -0.39 | DISCARD |
+| channel=20, failure=5, stop=1x width | failure window | 1D | forced-1:3 | 142 | 53.5 | 12.38 | 0.0872 | 0.44 | INCONCLUSIVE |
+| channel=20, failure=3, stop=0.5x width | stop width | 1H | native | 6772 | 57.8 | -534.05 | -0.0789 | -2.66 | DISCARD |
+| channel=20, failure=3, stop=0.5x width | stop width | 1H | forced-1:3 | 5028 | 41.5 | -309.43 | -0.0615 | -1.15 | DISCARD |
+| channel=20, failure=3, stop=0.5x width | stop width | 4H | native | 1694 | 57.6 | -92.29 | -0.0545 | -0.92 | DISCARD |
+| channel=20, failure=3, stop=0.5x width | stop width | 4H | forced-1:3 | 1262 | 41.1 | -63.98 | -0.0507 | -0.53 | DISCARD |
+| channel=20, failure=3, stop=0.5x width | stop width | 1D | native | 247 | 57.9 | -5.40 | -0.0219 | -0.17 | DISCARD |
+| channel=20, failure=3, stop=0.5x width | stop width | 1D | forced-1:3 | 179 | 44.1 | 19.14 | 0.1069 | 0.47 | INCONCLUSIVE |
+| channel=20, failure=3, stop=1.5x width | stop width | 1H | native | 5223 | 62.6 | -196.45 | -0.0376 | -2.42 | DISCARD |
+| channel=20, failure=3, stop=1.5x width | stop width | 1H | forced-1:3 | 3539 | 50.3 | -92.53 | -0.0261 | -0.89 | DISCARD |
+| channel=20, failure=3, stop=1.5x width | stop width | 4H | native | 1283 | 64.3 | -36.60 | -0.0285 | -0.96 | DISCARD |
+| channel=20, failure=3, stop=1.5x width | stop width | 4H | forced-1:3 | 881 | 49.3 | -30.17 | -0.0342 | -0.61 | DISCARD |
+| channel=20, failure=3, stop=1.5x width | stop width | 1D | native | 188 | 63.8 | -6.64 | -0.0353 | -0.50 | DISCARD |
+| channel=20, failure=3, stop=1.5x width | stop width | 1D | forced-1:3 | 130 | 53.1 | 6.81 | 0.0524 | 0.37 | INCONCLUSIVE |
+
+Six non-headline variants were tested independently; the headline reference is included and excluded from the denominator. No Cartesian sweep was added.
+
+### 11. Market-condition breakdown
+
+| Timeframe | Exit | Volatility | Trades | Post-fee total R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | lowvol | 2633 | -163.22 | -0.0620 |
+| 1H | native | highvol | 2985 | -128.46 | -0.0430 |
+| 1H | native | unknown | 0 | n/a | n/a |
+| 1H | forced-1:3 | lowvol | 1828 | -70.75 | -0.0387 |
+| 1H | forced-1:3 | highvol | 2012 | -89.63 | -0.0445 |
+| 1H | forced-1:3 | unknown | 0 | n/a | n/a |
+| 4H | native | lowvol | 703 | -20.21 | -0.0287 |
+| 4H | native | highvol | 678 | -33.12 | -0.0489 |
+| 4H | native | unknown | 0 | n/a | n/a |
+| 4H | forced-1:3 | lowvol | 502 | -4.93 | -0.0098 |
+| 4H | forced-1:3 | highvol | 450 | -36.02 | -0.0800 |
+| 4H | forced-1:3 | unknown | 0 | n/a | n/a |
+| 1D | native | lowvol | 117 | -2.73 | -0.0233 |
+| 1D | native | highvol | 85 | -5.24 | -0.0616 |
+| 1D | native | unknown | 0 | n/a | n/a |
+| 1D | forced-1:3 | lowvol | 74 | 12.11 | 0.1636 |
+| 1D | forced-1:3 | highvol | 65 | 4.49 | 0.0691 |
+| 1D | forced-1:3 | unknown | 0 | n/a | n/a |
+
+Regime labels are descriptive and do not affect decisions.
+
+Regime labels are descriptive only and do not affect signal, entry, or exit decisions.
+
+### 12. Source comparison and discrepancies
+
+The source note identifies this failed-break rule as an explicit adaptation, not a canonical Donchian system. No source-system performance claim is made. Execution choices not pinned by the spec are disclosed in section 1. Opus source code was not read.
+
+### 13. Fixed discard-bar verdict per cell
+
+The shared project fixed bar is applied after fees:
+
+```text
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+```
+
+| Timeframe | Exit | Trades >=30 | Expectancy >=0.10 | Sharpe >=0.70 | Recovery >=1.5 | Reward test | Discard conditions | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1H | native | True (5618) | False (-0.0519) | False (-2.55) | False (-1.00) | RR 0.46 FAIL; need 1.50 | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1H | forced-1:3 | True (3840) | False (-0.0418) | False (-1.06) | False (-0.96) | win 48.4% PASS; need 27.7% | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 4H | native | True (1381) | False (-0.0386) | False (-1.00) | False (-0.94) | RR 0.47 FAIL; need 1.50 | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 4H | forced-1:3 | True (952) | False (-0.0430) | False (-0.60) | False (-0.97) | win 47.7% PASS; need 27.3% | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1D | native | True (202) | False (-0.0394) | False (-0.44) | False (-0.73) | RR 0.44 FAIL; need 1.50 | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1D | forced-1:3 | True (139) | True (0.1194) | False (0.58) | True (1.71) | win 54.7% PASS; need 27.1% | exp<=0 no; Sharpe<0.30 no; recovery<0.50 no | INCONCLUSIVE |
+
+### 14. Bottom line (facts only)
+
+1H/native: 5618 trades, -0.0519R/trade, Sharpe -2.55, DISCARD; 1H/forced-1:3: 3840 trades, -0.0418R/trade, Sharpe -1.06, DISCARD; 4H/native: 1381 trades, -0.0386R/trade, Sharpe -1.00, DISCARD; 4H/forced-1:3: 952 trades, -0.0430R/trade, Sharpe -0.60, DISCARD; 1D/native: 202 trades, -0.0394R/trade, Sharpe -0.44, DISCARD; 1D/forced-1:3: 139 trades, +0.1194R/trade, Sharpe 0.58, INCONCLUSIVE
+
+### 14a. Concentration and parameter stability detail
+
+The headline is a reference, not an optimized replacement. Each of the three factors was varied independently with other headline settings held constant. Section 6 reports best-trade/top-five concentration and residual R. Non-headline parameter variants in this report: 6.
+
+### 15. Files created
+
+Dry run: no tracked files, engine, specs, or strategy logs were modified; no commit or push was performed. Independent source files and CSVs are new outputs only.
+
+| File | Lines | SHA-256 |
+|---|---:|---|
+| src/s18r_failed_break.py | 113 | 5ebfe7a05ac75cdb0fc42fe2726452e49bcf52414e6cf00d6613dab920f856da |
+| src/run_s18r.py | 911 | 542b046e8b0b0c75a214aa58d128889a251aa4ebb62cb6dbfdd871f5dbbe4ba3 |
+
+Trade-list CSVs under `trade_lists/s18r/`: 126 files across headline plus six independent sweep variants; total completed rows: 85878. Headline rows: 12132.
