@@ -8357,3 +8357,433 @@ Dry run: no tracked files, engine, specs, or strategy logs were modified; no com
 | src/run_s18r.py | 911 | 542b046e8b0b0c75a214aa58d128889a251aa4ebb62cb6dbfdd871f5dbbe4ba3 |
 
 Trade-list CSVs under `trade_lists/s18r/`: 126 files across headline plus six independent sweep variants; total completed rows: 85878. Headline rows: 12132.
+
+## Strategy #17 - DMI/ADX trend (+DI/-DI cross with ADX gate, opposite DI cross native exit, 2x ATR(14) stop)
+Dry run reviewed and validated 2026-10-17 (cache of 2026-09-04)
+Reviewer note: No cell is a KEEP. All six cells are DISCARD (1H native -0.0906R and forced-1:3 -0.1225R; 4H native +0.0681R, Sharpe 0.30; 4H forced-1:3 +0.0091R; 1D native +0.0227R; 1D forced-1:3 -0.0637R). None of the 26 non-headline sweep variants is a KEEP in any cell (0 of 156). The 4H native cell is nearest the bar and still falls short of the +0.10R expectancy requirement. An earlier run of the same spec by another executor gave close results (trade counts within 10 per cell, R/trade within 0.031R; 4H native INCONCLUSIVE at Sharpe 0.32 there against DISCARD at 0.30 here); this build is the one logged.
+### 1. Source and rule
+
+**Source:** J. Welles Wilder Jr., *New Concepts in Technical Trading Systems* (1978), Directional Movement System. Buy +DI crossing above −DI with ADX>25; short opposite cross with ADX>25; native exit on opposite DI cross. No TP. Stop 2×ATR(14), project placeholder.
+
+Ambiguities and choices, using the most literal reading of the spec:
+- Wilder seed: TR[0] is high-low and +DM[0]/-DM[0] are zero because no prior bar exists; TR and each DM series seed with the simple mean of the first n bars, then Wilder recursion.
+- ADX nesting: DX uses smoothed +DI/-DI; when their sum is zero DX is defined as 0. ADX seeds from the first n consecutive defined DX values with a simple mean, then Wilder recursion; no backfill. Headline first valid ADX is bar 2n-2 when data has nonzero TR.
+- The swept period applies to TR/+DM/-DM smoothing, ADX smoothing, and the ATR stop; only the ADX threshold and stop multiple vary separately across their specified grids.
+- Crosses use strict current-side superiority with prior equality allowed; entry also requires current ADX strictly > threshold. Native exits use the opposite DI cross without an ADX filter.
+- The ATR stop fraction is fixed from signal-bar ATR / signal-bar close and resolved at next-open fill through shared Signal.stop_frac; a price gap therefore scales the stop distance with fill.
+- A qualifying opposite entry on a native exit signal may reverse at the same next open under shared simulate; without ADX qualification the position only exits. Other signals while the position remains open are blocked.
+- Warmup is 3 x period+50 bars. Signals form on closed bars and fill next open; ties go to the stop; gap-through stops fill at open; end-open trades are discarded. One position per coin/timeframe; coins pool only within timeframe.
+- Fixed setup: taker fee 0.055% per side; funding not modeled; forced stop 1R / target 3R / 30-bar limit; standard simulate path.
+
+### 2. Wilder arithmetic
+
+For each bar, +DM is current high minus prior high only when positive and greater than the downward move; -DM is prior low minus current low only when positive and greater than the upward move; ties set both DM values to zero. TR is max(high-low, |high-prior close|, |low-prior close|). Wilder-smoothed values seed from the simple mean of the first n observations and update recursively. DI is 100 x smoothed DM / smoothed TR. DX is 100 x |(+DI) - (-DI)|/((+DI) + (-DI)); ADX is its Wilder average. ATR for the stop is the corresponding Wilder average of TR. The implementation exposes +DI, -DI, ADX, ATR and signal columns; invalid periods, thresholds or stop multiples raise ValueError.
+
+### 3. Fresh lookahead-bias audit
+
+RAN: fresh shared cut-and-recompute audit on the headline indicators for 9/9 required coin/timeframe datasets; 81 derived-column checks total. A failed audit aborts before report creation.
+
+| Dataset | Derived columns | Audit | Mismatches |
+|---|---:|---|---|
+| BTCUSDT 1H | 9 | PASS | none |
+| SOLUSDT 1H | 9 | PASS | none |
+| XRPUSDT 1H | 9 | PASS | none |
+| BTCUSDT 4H | 9 | PASS | none |
+| SOLUSDT 4H | 9 | PASS | none |
+| XRPUSDT 4H | 9 | PASS | none |
+| BTCUSDT 1D | 9 | PASS | none |
+| SOLUSDT 1D | 9 | PASS | none |
+| XRPUSDT 1D | 9 | PASS | none |
+
+### 4. Coverage and signal reconciliation
+
+| Coin | Timeframe | Bars | Warmup | Tradeable bars | First open UTC | Last open UTC | Calendar days |
+|---|---|---:|---:|---:|---|---|---:|
+| BTCUSDT | 1H | 56511 | 92 | 56419 | 2020-03-25 10:00 | 2026-09-05 00:00 | 2354.6 |
+| BTCUSDT | 4H | 14129 | 92 | 14037 | 2020-03-25 08:00 | 2026-09-05 00:00 | 2354.7 |
+| BTCUSDT | 1D | 2356 | 92 | 2264 | 2020-03-25 00:00 | 2026-09-05 00:00 | 2355.0 |
+| SOLUSDT | 1H | 42865 | 92 | 42773 | 2021-10-15 00:00 | 2026-09-05 00:00 | 1786.0 |
+| SOLUSDT | 4H | 10717 | 92 | 10625 | 2021-10-15 00:00 | 2026-09-05 00:00 | 1786.0 |
+| SOLUSDT | 1D | 1787 | 92 | 1695 | 2021-10-15 00:00 | 2026-09-05 00:00 | 1786.0 |
+| XRPUSDT | 1H | 46576 | 92 | 46484 | 2021-05-13 09:00 | 2026-09-05 00:00 | 1940.6 |
+| XRPUSDT | 4H | 11645 | 92 | 11553 | 2021-05-13 08:00 | 2026-09-05 00:00 | 1940.7 |
+| XRPUSDT | 1D | 1942 | 92 | 1850 | 2021-05-13 00:00 | 2026-09-05 00:00 | 1941.0 |
+
+History after the per-period warmup; open-ended trades are discarded. Each generated valid signal is categorized exactly once per exit path.
+
+| Coin | Timeframe | Exit | Signals | Taken/completed | Blocked/open | Last bar | Zero risk | Open at end/discarded | Other | Reconciles? |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 940 | 939 | 0 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 1H | forced-1:3 | 940 | 634 | 305 | 0 | 0 | 1 | 0 | PASS |
+| BTCUSDT | 4H | native | 251 | 251 | 0 | 0 | 0 | 0 | 0 | PASS |
+| BTCUSDT | 4H | forced-1:3 | 251 | 169 | 82 | 0 | 0 | 0 | 0 | PASS |
+| BTCUSDT | 1D | native | 32 | 32 | 0 | 0 | 0 | 0 | 0 | PASS |
+| BTCUSDT | 1D | forced-1:3 | 32 | 22 | 10 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 1H | native | 686 | 685 | 0 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 1H | forced-1:3 | 686 | 473 | 212 | 0 | 0 | 1 | 0 | PASS |
+| SOLUSDT | 4H | native | 195 | 195 | 0 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 4H | forced-1:3 | 195 | 122 | 73 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 1D | native | 23 | 23 | 0 | 0 | 0 | 0 | 0 | PASS |
+| SOLUSDT | 1D | forced-1:3 | 23 | 18 | 5 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 1H | native | 713 | 712 | 0 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1H | forced-1:3 | 713 | 485 | 227 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 4H | native | 190 | 190 | 0 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 4H | forced-1:3 | 190 | 129 | 61 | 0 | 0 | 0 | 0 | PASS |
+| XRPUSDT | 1D | native | 34 | 33 | 0 | 0 | 0 | 1 | 0 | PASS |
+| XRPUSDT | 1D | forced-1:3 | 34 | 20 | 14 | 0 | 0 | 0 | 0 | PASS |
+
+Reconciliation: PASSES; 6128 signals assigned to 6128 buckets.
+
+### 5. Pooled results
+
+| Timeframe | Exit | Trades | Win% | RR | R pre-fee | R post-fee | R/trade | Sharpe | Max DD % | Max DD R | R-recovery | Fee cost/trade | Verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1H | native | 2336 | 23.0 | 2.58 | -72.62 | -211.65 | -0.0906 | -1.14 | 227.36 | 255.43 | -0.83 | 0.0595 | **DISCARD** |
+| 1H | forced-1:3 | 1592 | 36.3 | 1.40 | -99.43 | -194.94 | -0.1225 | -1.30 | 191.59 | 215.80 | -0.90 | 0.0600 | **DISCARD** |
+| 4H | native | 636 | 25.2 | 3.56 | 60.40 | 43.33 | 0.0681 | 0.30 | 19.48 | 32.03 | 1.35 | 0.0268 | **DISCARD** |
+| 4H | forced-1:3 | 420 | 38.8 | 1.60 | 15.29 | 3.82 | 0.0091 | 0.05 | 25.54 | 32.28 | 0.12 | 0.0273 | **DISCARD** |
+| 1D | native | 88 | 22.7 | 3.64 | 2.82 | 2.00 | 0.0227 | 0.06 | 11.99 | 13.27 | 0.15 | 0.0093 | **DISCARD** |
+| 1D | forced-1:3 | 60 | 35.0 | 1.67 | -3.25 | -3.82 | -0.0637 | -0.15 | 17.23 | 17.35 | -0.22 | 0.0096 | **DISCARD** |
+
+### 6. Exit composition
+
+| Timeframe | Exit | Exit reason | Trades | Mean post-fee R | Total post-fee R |
+|---|---|---|---:|---:|---:|
+| 1H | native | opposite-DI-cross | 2020 | 0.0622 | 125.65 |
+| 1H | native | stop | 316 | -1.0674 | -337.30 |
+| 1H | forced-1:3 | stop | 849 | -1.0629 | -902.39 |
+| 1H | forced-1:3 | target | 134 | 2.9286 | 392.44 |
+| 1H | forced-1:3 | time | 609 | 0.5173 | 315.01 |
+| 4H | native | opposite-DI-cross | 567 | 0.2018 | 114.43 |
+| 4H | native | stop | 69 | -1.0304 | -71.10 |
+| 4H | forced-1:3 | stop | 217 | -1.0290 | -223.29 |
+| 4H | forced-1:3 | target | 44 | 2.9662 | 130.51 |
+| 4H | forced-1:3 | time | 159 | 0.6075 | 96.60 |
+| 1D | native | opposite-DI-cross | 81 | 0.1120 | 9.07 |
+| 1D | native | stop | 7 | -1.0102 | -7.07 |
+| 1D | forced-1:3 | stop | 35 | -1.0098 | -35.34 |
+| 1D | forced-1:3 | target | 7 | 2.9870 | 20.91 |
+| 1D | forced-1:3 | time | 18 | 0.5895 | 10.61 |
+
+### 7. Direction split
+
+| Timeframe | Exit | Side | Trades | Win% | Total post-fee R | R/trade |
+|---|---|---|---:|---:|---:|---:|
+| 1H | native | long | 1200 | 23.9 | -94.46 | -0.0787 |
+| 1H | native | short | 1136 | 22.1 | -117.19 | -0.1032 |
+| 1H | forced-1:3 | long | 835 | 36.4 | -106.42 | -0.1275 |
+| 1H | forced-1:3 | short | 757 | 36.2 | -88.52 | -0.1169 |
+| 4H | native | long | 321 | 24.3 | 46.67 | 0.1454 |
+| 4H | native | short | 315 | 26.0 | -3.34 | -0.0106 |
+| 4H | forced-1:3 | long | 219 | 33.8 | -15.92 | -0.0727 |
+| 4H | forced-1:3 | short | 201 | 44.3 | 19.75 | 0.0982 |
+| 1D | native | long | 40 | 22.5 | 3.66 | 0.0916 |
+| 1D | native | short | 48 | 22.9 | -1.66 | -0.0347 |
+| 1D | forced-1:3 | long | 27 | 18.5 | -12.01 | -0.4448 |
+| 1D | forced-1:3 | short | 33 | 48.5 | 8.19 | 0.2481 |
+
+### 8. Exit-death check
+
+The shared fixed diagnostic compares headline native and forced-1:3 outcomes per timeframe; it is descriptive and does not alter either verdict.
+
+| Timeframe | Native trades | Forced trades | Native R/trade | Forced R/trade | Exit-death flag | Diagnostic |
+|---|---:|---:|---:|---:|---|---|
+| 1H | 2336 | 1592 | -0.0906 | -0.1225 | no | the two exits land within 0.032R per trade of each other (native -0.091R vs forced 1:3 -0.122R), so the result is driven by the entry signal rather than by the choice of exit |
+| 4H | 636 | 420 | 0.0681 | 0.0091 | no | the two exits land within 0.059R per trade of each other (native +0.068R vs forced 1:3 +0.009R), so the result is driven by the entry signal rather than by the choice of exit |
+| 1D | 88 | 60 | 0.0227 | -0.0637 | yes | the exit flips the sign of the edge: native +0.023R per trade vs forced 1:3 -0.064R. Identical entries, so the entry signal is not what decided this - the forced 1:3 exit is. The edge, such as it is, lives in the native exit. |
+
+### 9. Per-coin results
+
+| Coin | Timeframe | Exit | Trades | Win% | R pre-fee | R post-fee | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| BTCUSDT | 1H | native | 939 | 21.5 | 9.27 | -63.33 | -0.0674 | -0.45 | DISCARD |
+| BTCUSDT | 1H | forced-1:3 | 634 | 36.6 | -23.25 | -72.58 | -0.1145 | -0.86 | DISCARD |
+| BTCUSDT | 4H | native | 251 | 25.9 | 26.42 | 17.75 | 0.0707 | 0.27 | DISCARD |
+| BTCUSDT | 4H | forced-1:3 | 169 | 41.4 | 21.36 | 15.39 | 0.0911 | 0.33 | INCONCLUSIVE |
+| BTCUSDT | 1D | native | 32 | 21.9 | 8.05 | 7.67 | 0.2397 | 0.31 | INCONCLUSIVE |
+| BTCUSDT | 1D | forced-1:3 | 22 | 22.7 | -8.18 | -8.44 | -0.3838 | -0.59 | INCONCLUSIVE |
+| SOLUSDT | 1H | native | 685 | 23.8 | -41.43 | -69.77 | -0.1019 | -1.09 | DISCARD |
+| SOLUSDT | 1H | forced-1:3 | 473 | 35.3 | -37.25 | -57.36 | -0.1213 | -0.90 | DISCARD |
+| SOLUSDT | 4H | native | 195 | 27.7 | 5.42 | 1.66 | 0.0085 | 0.05 | DISCARD |
+| SOLUSDT | 4H | forced-1:3 | 122 | 40.2 | 10.39 | 8.01 | 0.0657 | 0.24 | DISCARD |
+| SOLUSDT | 1D | native | 23 | 34.8 | 6.17 | 6.01 | 0.2612 | 0.55 | INCONCLUSIVE |
+| SOLUSDT | 1D | forced-1:3 | 18 | 61.1 | 11.94 | 11.81 | 0.6560 | 0.79 | INCONCLUSIVE |
+| XRPUSDT | 1H | native | 712 | 24.3 | -40.46 | -78.54 | -0.1103 | -1.24 | DISCARD |
+| XRPUSDT | 1H | forced-1:3 | 485 | 36.9 | -38.94 | -65.01 | -0.1340 | -1.04 | DISCARD |
+| XRPUSDT | 4H | native | 190 | 21.6 | 28.56 | 23.92 | 0.1259 | 0.22 | DISCARD |
+| XRPUSDT | 4H | forced-1:3 | 129 | 34.1 | -16.46 | -19.57 | -0.1517 | -0.60 | DISCARD |
+| XRPUSDT | 1D | native | 33 | 15.2 | -11.40 | -11.68 | -0.3539 | -1.78 | DISCARD |
+| XRPUSDT | 1D | forced-1:3 | 20 | 25.0 | -7.01 | -7.19 | -0.3593 | -0.64 | INCONCLUSIVE |
+
+### 10. Market context
+
+Regime labels are carried by the shared runner for description only; they do not affect signals or execution.
+
+| Timeframe | Exit | Regime | Trades | Post-fee R | R/trade |
+|---|---|---|---:|---:|---:|
+| 1H | native | down/highvol | 557 | -56.39 | -0.1012 |
+| 1H | native | down/lowvol | 408 | -54.59 | -0.1338 |
+| 1H | native | range/highvol | 205 | -0.37 | -0.0018 |
+| 1H | native | range/lowvol | 193 | -28.03 | -0.1452 |
+| 1H | native | range/unknown | 1 | -0.48 | -0.4785 |
+| 1H | native | up/highvol | 579 | -69.12 | -0.1194 |
+| 1H | native | up/lowvol | 393 | -2.68 | -0.0068 |
+| 1H | forced-1:3 | down/highvol | 370 | -58.41 | -0.1579 |
+| 1H | forced-1:3 | down/lowvol | 278 | -19.38 | -0.0697 |
+| 1H | forced-1:3 | range/highvol | 159 | 1.43 | 0.0090 |
+| 1H | forced-1:3 | range/lowvol | 133 | -24.08 | -0.1810 |
+| 1H | forced-1:3 | range/unknown | 1 | 0.14 | 0.1397 |
+| 1H | forced-1:3 | up/highvol | 376 | -60.91 | -0.1620 |
+| 1H | forced-1:3 | up/lowvol | 275 | -33.74 | -0.1227 |
+| 4H | native | down/highvol | 160 | 3.10 | 0.0194 |
+| 4H | native | down/lowvol | 101 | -5.19 | -0.0514 |
+| 4H | native | range/highvol | 57 | 53.02 | 0.9302 |
+| 4H | native | range/lowvol | 44 | 25.10 | 0.5704 |
+| 4H | native | range/unknown | 2 | -0.47 | -0.2340 |
+| 4H | native | up/highvol | 170 | -18.64 | -0.1096 |
+| 4H | native | up/lowvol | 102 | -13.60 | -0.1333 |
+| 4H | forced-1:3 | down/highvol | 96 | 8.15 | 0.0849 |
+| 4H | forced-1:3 | down/lowvol | 71 | -10.13 | -0.1426 |
+| 4H | forced-1:3 | range/highvol | 42 | -5.57 | -0.1325 |
+| 4H | forced-1:3 | range/lowvol | 30 | 8.83 | 0.2942 |
+| 4H | forced-1:3 | range/unknown | 1 | 0.95 | 0.9489 |
+| 4H | forced-1:3 | up/highvol | 108 | 2.31 | 0.0214 |
+| 4H | forced-1:3 | up/lowvol | 72 | -0.72 | -0.0100 |
+| 1D | native | down/highvol | 13 | 0.07 | 0.0050 |
+| 1D | native | down/lowvol | 22 | 2.30 | 0.1047 |
+| 1D | native | range/highvol | 14 | -2.32 | -0.1654 |
+| 1D | native | range/lowvol | 3 | -1.11 | -0.3693 |
+| 1D | native | up/highvol | 25 | 7.41 | 0.2963 |
+| 1D | native | up/lowvol | 11 | -4.36 | -0.3960 |
+| 1D | forced-1:3 | down/highvol | 7 | 1.54 | 0.2201 |
+| 1D | forced-1:3 | down/lowvol | 15 | -1.28 | -0.0854 |
+| 1D | forced-1:3 | range/highvol | 11 | -3.55 | -0.3227 |
+| 1D | forced-1:3 | range/lowvol | 3 | 6.10 | 2.0347 |
+| 1D | forced-1:3 | up/highvol | 14 | -7.59 | -0.5422 |
+| 1D | forced-1:3 | up/lowvol | 10 | 0.95 | 0.0954 |
+
+### 11. Fixed discard-bar verdict
+
+The project fixed bar is applied after fees; verdicts are from the shared discard_bar implementation.
+
+````
+Gate: fewer than 30 trades -> INCONCLUSIVE.
+KEEP needs all of: post-fee expectancy >= +0.10R per trade; post-fee Sharpe >= 0.7; total R >= 1.5x worst R drawdown; and (forced-1:3) win rate >= its own fee breakeven (1+c)/4 plus 2%, or (native) achieved RR >= 1.5:1.
+DISCARD on any of: post-fee expectancy <= +0.00R; post-fee Sharpe < 0.3; total R < 0.5x worst R drawdown.
+Anything in between -> INCONCLUSIVE.
+````
+
+| Timeframe | Exit | Trades >=30 | Expectancy >=0.10 | Sharpe >=0.70 | Recovery >=1.5 | Reward test | Discard conditions | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1H | native | True (2336) | False (-0.0906) | False (-1.14) | False (-0.83) | RR 2.58 PASS; need 1.50 | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1H | forced-1:3 | True (1592) | False (-0.1225) | False (-1.30) | False (-0.90) | win 36.3% PASS; need 28.5% | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 4H | native | True (636) | False (0.0681) | False (0.30) | False (1.35) | RR 3.56 PASS; need 1.50 | exp<=0 no; Sharpe<0.30 yes; recovery<0.50 no | DISCARD |
+| 4H | forced-1:3 | True (420) | False (0.0091) | False (0.05) | False (0.12) | win 38.8% PASS; need 27.7% | exp<=0 no; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1D | native | True (88) | False (0.0227) | False (0.06) | False (0.15) | RR 3.64 PASS; need 1.50 | exp<=0 no; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+| 1D | forced-1:3 | True (60) | False (-0.0637) | False (-0.15) | False (-0.22) | win 35.0% PASS; need 27.2% | exp<=0 yes; Sharpe<0.30 yes; recovery<0.50 yes | DISCARD |
+
+### 12. Parameter sensitivity
+
+| Variant | Timeframe | Exit | Trades | Win% | Post-fee total R | R/trade | Sharpe | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| period=10, ADX>20, stop=1.5 ATR | 1H | native | 7612 | 25.3 | -553.53 | -0.0727 | -1.34 | DISCARD |
+| period=10, ADX>20, stop=1.5 ATR | 1H | forced-1:3 | 4288 | 32.7 | -291.03 | -0.0679 | -0.99 | DISCARD |
+| period=10, ADX>20, stop=1.5 ATR | 4H | native | 1969 | 27.7 | 230.00 | 0.1168 | 0.66 | INCONCLUSIVE |
+| period=10, ADX>20, stop=1.5 ATR | 4H | forced-1:3 | 1090 | 33.9 | 32.99 | 0.0303 | 0.22 | DISCARD |
+| period=10, ADX>20, stop=1.5 ATR | 1D | native | 308 | 28.2 | 128.82 | 0.4182 | 0.66 | INCONCLUSIVE |
+| period=10, ADX>20, stop=1.5 ATR | 1D | forced-1:3 | 169 | 32.0 | -8.19 | -0.0485 | -0.16 | DISCARD |
+| period=10, ADX>20, stop=2 ATR | 1H | native | 7612 | 25.9 | -419.01 | -0.0550 | -1.32 | DISCARD |
+| period=10, ADX>20, stop=2 ATR | 1H | forced-1:3 | 3713 | 37.7 | -122.29 | -0.0329 | -0.50 | DISCARD |
+| period=10, ADX>20, stop=2 ATR | 4H | native | 1969 | 28.1 | 160.44 | 0.0815 | 0.60 | INCONCLUSIVE |
+| period=10, ADX>20, stop=2 ATR | 4H | forced-1:3 | 935 | 38.0 | 12.05 | 0.0129 | 0.10 | DISCARD |
+| period=10, ADX>20, stop=2 ATR | 1D | native | 308 | 28.6 | 97.96 | 0.3181 | 0.67 | INCONCLUSIVE |
+| period=10, ADX>20, stop=2 ATR | 1D | forced-1:3 | 148 | 35.1 | -11.99 | -0.0810 | -0.30 | DISCARD |
+| period=10, ADX>20, stop=2.5 ATR | 1H | native | 7612 | 26.2 | -317.48 | -0.0417 | -1.22 | DISCARD |
+| period=10, ADX>20, stop=2.5 ATR | 1H | forced-1:3 | 3428 | 41.2 | -106.19 | -0.0310 | -0.51 | DISCARD |
+| period=10, ADX>20, stop=2.5 ATR | 4H | native | 1968 | 28.3 | 123.44 | 0.0627 | 0.58 | INCONCLUSIVE |
+| period=10, ADX>20, stop=2.5 ATR | 4H | forced-1:3 | 851 | 42.5 | 40.30 | 0.0474 | 0.38 | INCONCLUSIVE |
+| period=10, ADX>20, stop=2.5 ATR | 1D | native | 308 | 28.6 | 79.22 | 0.2572 | 0.68 | INCONCLUSIVE |
+| period=10, ADX>20, stop=2.5 ATR | 1D | forced-1:3 | 136 | 44.1 | 12.18 | 0.0896 | 0.32 | INCONCLUSIVE |
+| period=10, ADX>25, stop=1.5 ATR | 1H | native | 4422 | 24.8 | -527.04 | -0.1192 | -2.13 | DISCARD |
+| period=10, ADX>25, stop=1.5 ATR | 1H | forced-1:3 | 2977 | 31.8 | -358.39 | -0.1204 | -1.52 | DISCARD |
+| period=10, ADX>25, stop=1.5 ATR | 4H | native | 1133 | 27.2 | 117.83 | 0.1040 | 0.59 | INCONCLUSIVE |
+| period=10, ADX>25, stop=1.5 ATR | 4H | forced-1:3 | 759 | 35.6 | 39.58 | 0.0522 | 0.31 | INCONCLUSIVE |
+| period=10, ADX>25, stop=1.5 ATR | 1D | native | 173 | 28.9 | 62.12 | 0.3591 | 0.41 | INCONCLUSIVE |
+| period=10, ADX>25, stop=1.5 ATR | 1D | forced-1:3 | 122 | 34.4 | 9.12 | 0.0747 | 0.18 | DISCARD |
+| period=10, ADX>25, stop=2 ATR | 1H | native | 4422 | 25.6 | -376.24 | -0.0851 | -1.97 | DISCARD |
+| period=10, ADX>25, stop=2 ATR | 1H | forced-1:3 | 2695 | 37.3 | -187.80 | -0.0697 | -0.94 | DISCARD |
+| period=10, ADX>25, stop=2 ATR | 4H | native | 1133 | 27.5 | 83.22 | 0.0735 | 0.55 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2 ATR | 4H | forced-1:3 | 685 | 41.2 | 35.26 | 0.0515 | 0.35 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2 ATR | 1D | native | 173 | 28.9 | 46.70 | 0.2699 | 0.41 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2 ATR | 1D | forced-1:3 | 113 | 36.3 | -1.15 | -0.0102 | -0.03 | DISCARD |
+| period=10, ADX>25, stop=2.5 ATR | 1H | native | 4422 | 25.8 | -311.81 | -0.0705 | -2.00 | DISCARD |
+| period=10, ADX>25, stop=2.5 ATR | 1H | forced-1:3 | 2542 | 40.6 | -163.75 | -0.0644 | -0.95 | DISCARD |
+| period=10, ADX>25, stop=2.5 ATR | 4H | native | 1132 | 27.7 | 66.96 | 0.0592 | 0.56 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2.5 ATR | 4H | forced-1:3 | 647 | 44.0 | 39.62 | 0.0612 | 0.45 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2.5 ATR | 1D | native | 173 | 28.9 | 38.47 | 0.2224 | 0.42 | INCONCLUSIVE |
+| period=10, ADX>25, stop=2.5 ATR | 1D | forced-1:3 | 109 | 41.3 | 0.98 | 0.0090 | 0.03 | DISCARD |
+| period=10, ADX>30, stop=1.5 ATR | 1H | native | 2371 | 24.9 | -328.55 | -0.1386 | -1.79 | DISCARD |
+| period=10, ADX>30, stop=1.5 ATR | 1H | forced-1:3 | 1836 | 30.4 | -306.98 | -0.1672 | -1.72 | DISCARD |
+| period=10, ADX>30, stop=1.5 ATR | 4H | native | 620 | 28.4 | 47.28 | 0.0763 | 0.38 | INCONCLUSIVE |
+| period=10, ADX>30, stop=1.5 ATR | 4H | forced-1:3 | 484 | 35.7 | 27.34 | 0.0565 | 0.28 | DISCARD |
+| period=10, ADX>30, stop=1.5 ATR | 1D | native | 90 | 26.7 | -0.49 | -0.0055 | -0.02 | DISCARD |
+| period=10, ADX>30, stop=1.5 ATR | 1D | forced-1:3 | 72 | 30.6 | -3.37 | -0.0468 | -0.10 | DISCARD |
+| period=10, ADX>30, stop=2 ATR | 1H | native | 2371 | 25.7 | -236.08 | -0.0996 | -1.67 | DISCARD |
+| period=10, ADX>30, stop=2 ATR | 1H | forced-1:3 | 1707 | 35.7 | -194.97 | -0.1142 | -1.28 | DISCARD |
+| period=10, ADX>30, stop=2 ATR | 4H | native | 620 | 28.9 | 35.26 | 0.0569 | 0.37 | INCONCLUSIVE |
+| period=10, ADX>30, stop=2 ATR | 4H | forced-1:3 | 456 | 41.2 | 20.76 | 0.0455 | 0.25 | DISCARD |
+| period=10, ADX>30, stop=2 ATR | 1D | native | 90 | 26.7 | -0.76 | -0.0085 | -0.03 | DISCARD |
+| period=10, ADX>30, stop=2 ATR | 1D | forced-1:3 | 68 | 35.3 | -1.44 | -0.0212 | -0.05 | DISCARD |
+| period=10, ADX>30, stop=2.5 ATR | 1H | native | 2371 | 26.0 | -195.07 | -0.0823 | -1.69 | DISCARD |
+| period=10, ADX>30, stop=2.5 ATR | 1H | forced-1:3 | 1648 | 38.9 | -161.20 | -0.0978 | -1.19 | DISCARD |
+| period=10, ADX>30, stop=2.5 ATR | 4H | native | 619 | 28.9 | 27.66 | 0.0447 | 0.36 | INCONCLUSIVE |
+| period=10, ADX>30, stop=2.5 ATR | 4H | forced-1:3 | 441 | 44.7 | 24.59 | 0.0557 | 0.34 | INCONCLUSIVE |
+| period=10, ADX>30, stop=2.5 ATR | 1D | native | 90 | 26.7 | 0.00 | 0.0000 | 0.00 | DISCARD |
+| period=10, ADX>30, stop=2.5 ATR | 1D | forced-1:3 | 67 | 40.3 | 0.54 | 0.0081 | 0.02 | DISCARD |
+| period=14, ADX>20, stop=1.5 ATR | 1H | native | 4657 | 22.7 | -383.42 | -0.0823 | -1.13 | DISCARD |
+| period=14, ADX>20, stop=1.5 ATR | 1H | forced-1:3 | 2939 | 32.4 | -256.33 | -0.0872 | -1.06 | DISCARD |
+| period=14, ADX>20, stop=1.5 ATR | 4H | native | 1254 | 25.4 | 171.54 | 0.1368 | 0.64 | INCONCLUSIVE |
+| period=14, ADX>20, stop=1.5 ATR | 4H | forced-1:3 | 767 | 35.9 | 56.81 | 0.0741 | 0.45 | INCONCLUSIVE |
+| period=14, ADX>20, stop=1.5 ATR | 1D | native | 190 | 27.9 | 81.60 | 0.4295 | 0.56 | INCONCLUSIVE |
+| period=14, ADX>20, stop=1.5 ATR | 1D | forced-1:3 | 122 | 33.6 | 7.70 | 0.0631 | 0.17 | DISCARD |
+| period=14, ADX>20, stop=2 ATR | 1H | native | 4657 | 23.5 | -280.88 | -0.0603 | -1.07 | DISCARD |
+| period=14, ADX>20, stop=2 ATR | 1H | forced-1:3 | 2598 | 36.9 | -199.49 | -0.0768 | -0.97 | DISCARD |
+| period=14, ADX>20, stop=2 ATR | 4H | native | 1254 | 26.1 | 130.91 | 0.1044 | 0.65 | INCONCLUSIVE |
+| period=14, ADX>20, stop=2 ATR | 4H | forced-1:3 | 680 | 38.1 | 14.14 | 0.0208 | 0.13 | DISCARD |
+| period=14, ADX>20, stop=2 ATR | 1D | native | 190 | 28.4 | 61.06 | 0.3213 | 0.56 | INCONCLUSIVE |
+| period=14, ADX>20, stop=2 ATR | 1D | forced-1:3 | 110 | 36.4 | 4.94 | 0.0449 | 0.14 | DISCARD |
+| period=14, ADX>20, stop=2.5 ATR | 1H | native | 4657 | 23.7 | -244.14 | -0.0524 | -1.15 | DISCARD |
+| period=14, ADX>20, stop=2.5 ATR | 1H | forced-1:3 | 2434 | 40.5 | -192.55 | -0.0791 | -1.08 | DISCARD |
+| period=14, ADX>20, stop=2.5 ATR | 4H | native | 1254 | 26.4 | 105.85 | 0.0844 | 0.66 | INCONCLUSIVE |
+| period=14, ADX>20, stop=2.5 ATR | 4H | forced-1:3 | 642 | 42.5 | 29.80 | 0.0464 | 0.31 | INCONCLUSIVE |
+| period=14, ADX>20, stop=2.5 ATR | 1D | native | 190 | 28.4 | 48.29 | 0.2541 | 0.55 | INCONCLUSIVE |
+| period=14, ADX>20, stop=2.5 ATR | 1D | forced-1:3 | 99 | 39.4 | 5.45 | 0.0550 | 0.18 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 1H | native | 2336 | 22.0 | -303.77 | -0.1300 | -1.28 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 1H | forced-1:3 | 1746 | 31.2 | -258.22 | -0.1479 | -1.49 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 4H | native | 636 | 24.4 | 47.96 | 0.0754 | 0.25 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 4H | forced-1:3 | 464 | 34.5 | -2.39 | -0.0051 | -0.03 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 1D | native | 88 | 21.6 | 1.85 | 0.0210 | 0.04 | DISCARD |
+| period=14, ADX>25, stop=1.5 ATR | 1D | forced-1:3 | 63 | 33.3 | -1.51 | -0.0240 | -0.05 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 1H | native | 2336 | 23.0 | -211.65 | -0.0906 | -1.14 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 1H | forced-1:3 | 1592 | 36.3 | -194.94 | -0.1225 | -1.30 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 4H | native | 636 | 25.2 | 43.33 | 0.0681 | 0.30 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 4H | forced-1:3 | 420 | 38.8 | 3.82 | 0.0091 | 0.05 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 1D | native | 88 | 22.7 | 2.00 | 0.0227 | 0.06 | DISCARD |
+| period=14, ADX>25, stop=2 ATR (headline reference) | 1D | forced-1:3 | 60 | 35.0 | -3.82 | -0.0637 | -0.15 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 1H | native | 2336 | 23.3 | -179.69 | -0.0769 | -1.19 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 1H | forced-1:3 | 1531 | 39.3 | -187.72 | -0.1226 | -1.44 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 4H | native | 636 | 25.3 | 33.07 | 0.0520 | 0.28 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 4H | forced-1:3 | 403 | 42.7 | 11.26 | 0.0279 | 0.16 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 1D | native | 88 | 22.7 | 1.81 | 0.0205 | 0.07 | DISCARD |
+| period=14, ADX>25, stop=2.5 ATR | 1D | forced-1:3 | 59 | 37.3 | -2.38 | -0.0403 | -0.09 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 1H | native | 1115 | 22.6 | -144.18 | -0.1293 | -0.91 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 1H | forced-1:3 | 930 | 31.0 | -182.70 | -0.1965 | -1.53 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 4H | native | 310 | 22.9 | -25.01 | -0.0807 | -0.32 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 4H | forced-1:3 | 247 | 33.6 | -16.26 | -0.0658 | -0.27 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 1D | native | 45 | 15.6 | -7.68 | -0.1706 | -0.43 | DISCARD |
+| period=14, ADX>30, stop=1.5 ATR | 1D | forced-1:3 | 37 | 32.4 | -2.75 | -0.0744 | -0.12 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 1H | native | 1115 | 24.1 | -90.79 | -0.0814 | -0.74 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 1H | forced-1:3 | 879 | 36.2 | -134.98 | -0.1536 | -1.30 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 4H | native | 310 | 23.9 | -15.11 | -0.0487 | -0.25 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 4H | forced-1:3 | 237 | 40.5 | 6.24 | 0.0263 | 0.11 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 1D | native | 45 | 15.6 | -6.31 | -0.1403 | -0.46 | DISCARD |
+| period=14, ADX>30, stop=2 ATR | 1D | forced-1:3 | 35 | 34.3 | -4.18 | -0.1194 | -0.22 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 1H | native | 1115 | 24.4 | -78.34 | -0.0703 | -0.78 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 1H | forced-1:3 | 862 | 38.7 | -140.45 | -0.1629 | -1.55 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 4H | native | 310 | 24.2 | -10.81 | -0.0349 | -0.22 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 4H | forced-1:3 | 232 | 44.0 | 11.77 | 0.0507 | 0.22 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 1D | native | 45 | 15.6 | -5.86 | -0.1303 | -0.51 | DISCARD |
+| period=14, ADX>30, stop=2.5 ATR | 1D | forced-1:3 | 34 | 35.3 | -4.95 | -0.1455 | -0.30 | DISCARD |
+| period=20, ADX>20, stop=1.5 ATR | 1H | native | 2585 | 21.8 | -132.15 | -0.0511 | -0.45 | DISCARD |
+| period=20, ADX>20, stop=1.5 ATR | 1H | forced-1:3 | 1727 | 30.1 | -290.33 | -0.1681 | -1.67 | DISCARD |
+| period=20, ADX>20, stop=1.5 ATR | 4H | native | 686 | 24.6 | 68.06 | 0.0992 | 0.33 | INCONCLUSIVE |
+| period=20, ADX>20, stop=1.5 ATR | 4H | forced-1:3 | 465 | 34.6 | -8.39 | -0.0180 | -0.09 | DISCARD |
+| period=20, ADX>20, stop=1.5 ATR | 1D | native | 117 | 19.7 | -18.06 | -0.1543 | -0.59 | DISCARD |
+| period=20, ADX>20, stop=1.5 ATR | 1D | forced-1:3 | 74 | 29.7 | -7.62 | -0.1029 | -0.24 | DISCARD |
+| period=20, ADX>20, stop=2 ATR | 1H | native | 2585 | 22.7 | -110.10 | -0.0426 | -0.50 | DISCARD |
+| period=20, ADX>20, stop=2 ATR | 1H | forced-1:3 | 1541 | 34.8 | -231.74 | -0.1504 | -1.59 | DISCARD |
+| period=20, ADX>20, stop=2 ATR | 4H | native | 686 | 25.7 | 71.15 | 0.1037 | 0.44 | INCONCLUSIVE |
+| period=20, ADX>20, stop=2 ATR | 4H | forced-1:3 | 410 | 40.2 | 4.09 | 0.0100 | 0.05 | DISCARD |
+| period=20, ADX>20, stop=2 ATR | 1D | native | 117 | 19.7 | -15.86 | -0.1355 | -0.67 | DISCARD |
+| period=20, ADX>20, stop=2 ATR | 1D | forced-1:3 | 68 | 33.8 | -5.74 | -0.0844 | -0.21 | DISCARD |
+| period=20, ADX>20, stop=2.5 ATR | 1H | native | 2585 | 23.2 | -90.10 | -0.0349 | -0.51 | DISCARD |
+| period=20, ADX>20, stop=2.5 ATR | 1H | forced-1:3 | 1460 | 38.1 | -196.71 | -0.1347 | -1.55 | DISCARD |
+| period=20, ADX>20, stop=2.5 ATR | 4H | native | 686 | 26.1 | 55.65 | 0.0811 | 0.43 | INCONCLUSIVE |
+| period=20, ADX>20, stop=2.5 ATR | 4H | forced-1:3 | 389 | 44.7 | 15.91 | 0.0409 | 0.22 | DISCARD |
+| period=20, ADX>20, stop=2.5 ATR | 1D | native | 117 | 19.7 | -13.81 | -0.1180 | -0.71 | DISCARD |
+| period=20, ADX>20, stop=2.5 ATR | 1D | forced-1:3 | 61 | 41.0 | 1.63 | 0.0267 | 0.07 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 1H | native | 1139 | 20.9 | -28.57 | -0.0251 | -0.13 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 1H | forced-1:3 | 848 | 29.6 | -152.87 | -0.1803 | -1.29 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 4H | native | 306 | 20.6 | 48.36 | 0.1580 | 0.27 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 4H | forced-1:3 | 230 | 29.6 | -28.55 | -0.1242 | -0.47 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 1D | native | 48 | 16.7 | -11.89 | -0.2476 | -0.73 | DISCARD |
+| period=20, ADX>25, stop=1.5 ATR | 1D | forced-1:3 | 33 | 21.2 | -10.53 | -0.3190 | -0.54 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 1H | native | 1139 | 21.9 | -25.63 | -0.0225 | -0.15 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 1H | forced-1:3 | 780 | 34.1 | -124.77 | -0.1600 | -1.23 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 4H | native | 306 | 21.2 | 36.85 | 0.1204 | 0.27 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 4H | forced-1:3 | 212 | 34.9 | -25.91 | -0.1222 | -0.51 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 1D | native | 48 | 16.7 | -10.43 | -0.2173 | -0.82 | DISCARD |
+| period=20, ADX>25, stop=2 ATR | 1D | forced-1:3 | 30 | 23.3 | -8.10 | -0.2700 | -0.50 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 1H | native | 1139 | 22.2 | -24.59 | -0.0216 | -0.18 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 1H | forced-1:3 | 749 | 37.8 | -103.13 | -0.1377 | -1.19 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 4H | native | 306 | 22.2 | 28.92 | 0.0945 | 0.27 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 4H | forced-1:3 | 205 | 40.5 | -11.35 | -0.0554 | -0.24 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 1D | native | 48 | 16.7 | -8.75 | -0.1823 | -0.84 | DISCARD |
+| period=20, ADX>25, stop=2.5 ATR | 1D | forced-1:3 | 29 | 31.0 | -4.05 | -0.1396 | -0.28 | INCONCLUSIVE |
+| period=20, ADX>30, stop=1.5 ATR | 1H | native | 467 | 16.7 | -71.37 | -0.1528 | -0.64 | DISCARD |
+| period=20, ADX>30, stop=1.5 ATR | 1H | forced-1:3 | 377 | 24.7 | -132.89 | -0.3525 | -1.82 | DISCARD |
+| period=20, ADX>30, stop=1.5 ATR | 4H | native | 117 | 18.8 | -13.76 | -0.1176 | -0.30 | DISCARD |
+| period=20, ADX>30, stop=1.5 ATR | 4H | forced-1:3 | 94 | 28.7 | -23.80 | -0.2532 | -0.74 | DISCARD |
+| period=20, ADX>30, stop=1.5 ATR | 1D | native | 18 | 5.6 | -7.12 | -0.3957 | -0.74 | INCONCLUSIVE |
+| period=20, ADX>30, stop=1.5 ATR | 1D | forced-1:3 | 15 | 20.0 | -5.65 | -0.3767 | -0.45 | INCONCLUSIVE |
+| period=20, ADX>30, stop=2 ATR | 1H | native | 467 | 17.8 | -54.63 | -0.1170 | -0.64 | DISCARD |
+| period=20, ADX>30, stop=2 ATR | 1H | forced-1:3 | 354 | 29.7 | -99.43 | -0.2809 | -1.58 | DISCARD |
+| period=20, ADX>30, stop=2 ATR | 4H | native | 117 | 18.8 | -12.32 | -0.1053 | -0.36 | DISCARD |
+| period=20, ADX>30, stop=2 ATR | 4H | forced-1:3 | 86 | 32.6 | -18.46 | -0.2147 | -0.65 | DISCARD |
+| period=20, ADX>30, stop=2 ATR | 1D | native | 18 | 5.6 | -5.91 | -0.3281 | -0.79 | INCONCLUSIVE |
+| period=20, ADX>30, stop=2 ATR | 1D | forced-1:3 | 13 | 15.4 | -6.12 | -0.4708 | -0.62 | INCONCLUSIVE |
+| period=20, ADX>30, stop=2.5 ATR | 1H | native | 467 | 18.4 | -48.11 | -0.1030 | -0.70 | DISCARD |
+| period=20, ADX>30, stop=2.5 ATR | 1H | forced-1:3 | 350 | 33.4 | -77.86 | -0.2225 | -1.42 | DISCARD |
+| period=20, ADX>30, stop=2.5 ATR | 4H | native | 117 | 19.7 | -10.21 | -0.0873 | -0.36 | DISCARD |
+| period=20, ADX>30, stop=2.5 ATR | 4H | forced-1:3 | 85 | 35.3 | -17.86 | -0.2102 | -0.70 | DISCARD |
+| period=20, ADX>30, stop=2.5 ATR | 1D | native | 18 | 5.6 | -4.55 | -0.2528 | -0.76 | INCONCLUSIVE |
+| period=20, ADX>30, stop=2.5 ATR | 1D | forced-1:3 | 13 | 23.1 | -1.22 | -0.0935 | -0.11 | INCONCLUSIVE |
+
+There are 26 non-headline variants (3 periods x 3 thresholds x 3 stop multiples = 27 total combinations, including the headline). 0/26 non-headline variants have at least one KEEP; 0/156 non-headline pooled timeframe/exit cells are KEEP.
+The headline is a reference row only; the sweep does not select or replace it.
+
+### 13. Fees and funding
+
+RAN: both entry and exit use the 0.055% taker fee through the shared simulator. Funding and slippage are not modeled; no funding-adjusted result is claimed. Post-fee R drives verdicts; Sharpe is from harness.metrics.
+
+### 14. Bottom line (facts only)
+
+1H/native: 2336 trades, -0.0906R/trade, Sharpe -1.14, DISCARD; 1H/forced-1:3: 1592 trades, -0.1225R/trade, Sharpe -1.30, DISCARD; 4H/native: 636 trades, +0.0681R/trade, Sharpe 0.30, DISCARD; 4H/forced-1:3: 420 trades, +0.0091R/trade, Sharpe 0.05, DISCARD; 1D/native: 88 trades, +0.0227R/trade, Sharpe 0.06, DISCARD; 1D/forced-1:3: 60 trades, -0.0637R/trade, Sharpe -0.15, DISCARD
+
+The grid has 26 non-headline variants; 0/26 non-headline variants have at least one KEEP; 0/156 non-headline pooled timeframe/exit cells are KEEP. The sweep is reported as sensitivity, not used to select a replacement headline.
+
+### 14a. Native-exit holding behavior
+
+Statistics cover completed headline native trades. Blocked signals are the reconciled native stream's signals observed while a position is held.
+
+| Timeframe | Mean bars | Median bars | Maximum bars | Exit reason | Trades | Mean post-fee R | Signals blocked while open |
+|---|---:|---:|---:|---|---:|---:|---:|
+| 1H | 12.86 | 6.00 | 132 | opposite-DI-cross | 2020 | 0.0622 | 0 |
+| 1H |  |  |  | stop | 316 | -1.0674 |  |
+| 4H | 12.59 | 5.50 | 123 | opposite-DI-cross | 567 | 0.2018 | 0 |
+| 4H |  |  |  | stop | 69 | -1.0304 |  |
+| 1D | 9.95 | 5.00 | 50 | opposite-DI-cross | 81 | 0.1120 | 0 |
+| 1D |  |  |  | stop | 7 | -1.0102 |  |
+
+### 15. Limits and created files
+
+RAN: headline test, nine lookahead audits, six pooled cells, per-coin/context summaries, signal reconciliation, all 27 parameter combinations, and CSV row-count verification. DID NOT RUN: funding/slippage modeling, alternate/resting-order execution, and external downloads. No engine, spec, log, tracked file, GitHub, or Git state was changed; no commit, push, stage, or fetch was performed.
+
+Trade-list files: 486 (27 combinations x 3 coins x 3 timeframes x 2 exits); completed rows: 167539. Every CSV row count matched its in-memory trade list.
+
+| New source file | Lines | SHA-256 |
+|---|---:|---|
+| src/s17r_dmi_adx.py | 185 | ab9bdf61f72d68bbeb9e61ae019c42bc8f6c20b28aee5eeb7b79a4ef907e0dca |
+| src/run_s17r.py | 618 | 918ba865c1de2aed4ce8b76268e3e7a738245404e1f3639351f81a633a7d5f3b |
+
+Report: C:\Users\MarketCoder\Desktop\s17r_report.txt. The report is written only after all preceding checks pass.
